@@ -8,7 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { SubmitProfileButton } from "@/components/vendor/submit-profile-button";
-import { APPROVAL_STATUS_COLORS, APPROVAL_STATUS_LABELS, NEXT_STEP_COPY } from "@/lib/constants";
+import { ApplyButton } from "@/components/vendor/apply-button";
+import {
+  APPROVAL_STATUS_COLORS,
+  APPROVAL_STATUS_LABELS,
+  APPLICATION_STATUS_LABELS,
+  NEXT_STEP_COPY,
+} from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -41,6 +47,28 @@ export default async function VendorDashboardPage() {
   );
   const canSubmit = isProfileComplete && ["profile_incomplete", "rejected"].includes(business.approval_status);
   const nextStep = NEXT_STEP_COPY[business.approval_status];
+
+  const { data: openEvent } = await supabase
+    .from("events")
+    .select("id, name, location, description, vendor_rules, setup_instructions, start_at, end_at")
+    .eq("registration_status", "open")
+    .maybeSingle();
+
+  const { data: currentApplication } = openEvent
+    ? await supabase
+        .from("applications")
+        .select("id, status, rejection_reason")
+        .eq("event_id", openEvent.id)
+        .eq("business_id", business.id)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: pastApplications } = await supabase
+    .from("applications")
+    .select("id, status, created_at, events(id, name, start_at, end_at, location)")
+    .eq("business_id", business.id)
+    .neq("event_id", openEvent?.id ?? "00000000-0000-0000-0000-000000000000")
+    .order("created_at", { ascending: false });
 
   return (
     <div className="space-y-6">
@@ -134,17 +162,103 @@ export default async function VendorDashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Dar Al Hay events</CardTitle>
-          <CardDescription>Event registration opens once your business is approved.</CardDescription>
+          <CardTitle>Current event</CardTitle>
+          <CardDescription>
+            {openEvent ? "Registration is open." : "Event registration opens once your business is approved."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-ink-500">
-            {business.approval_status === "approved"
-              ? "There is no open event right now. We'll notify you the moment registration opens."
-              : "Get approved to unlock event registration, booth selection, and payment."}
-          </p>
+          {business.approval_status !== "approved" ? (
+            <p className="text-sm text-ink-500">
+              Get approved to unlock event registration, booth selection, and payment.
+            </p>
+          ) : !openEvent ? (
+            <p className="text-sm text-ink-500">
+              There is no open event right now. We&rsquo;ll notify you the moment registration opens.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <p className="font-semibold text-ink-900">{openEvent.name}</p>
+                <p className="mt-1 text-sm text-ink-500">
+                  {openEvent.location ?? "Location TBA"} · {formatDate(openEvent.start_at)} – {formatDate(openEvent.end_at)}
+                </p>
+                {openEvent.description && <p className="mt-2 text-sm text-ink-600">{openEvent.description}</p>}
+              </div>
+
+              {!currentApplication || currentApplication.status === "not_started" ? (
+                <ApplyButton eventId={openEvent.id} />
+              ) : (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-ink-500">Your application status</p>
+                    <Badge className="mt-1 border-ink-200 bg-ink-50 text-ink-700">
+                      {APPLICATION_STATUS_LABELS[currentApplication.status]}
+                    </Badge>
+                    {currentApplication.status === "rejected" && currentApplication.rejection_reason && (
+                      <p className="mt-2 max-w-md rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                        Reason: {currentApplication.rejection_reason}
+                      </p>
+                    )}
+                    {currentApplication.status === "approved" && (
+                      <p className="mt-2 text-sm text-ink-500">
+                        Booth selection isn&rsquo;t open yet — we&rsquo;ll let you know as soon as it is.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {openEvent.vendor_rules && (
+                <details className="text-sm text-ink-600">
+                  <summary className="cursor-pointer font-medium text-ink-800">Vendor rules</summary>
+                  <p className="mt-2 whitespace-pre-line">{openEvent.vendor_rules}</p>
+                </details>
+              )}
+              {openEvent.setup_instructions && (
+                <details className="text-sm text-ink-600">
+                  <summary className="cursor-pointer font-medium text-ink-800">Setup instructions</summary>
+                  <p className="mt-2 whitespace-pre-line">{openEvent.setup_instructions}</p>
+                </details>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {!!pastApplications?.length && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Past Dar Al Hay events</CardTitle>
+            <CardDescription>Events you&rsquo;ve applied to before.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-ink-100">
+              {pastApplications.map((application) => {
+                const pastEvent = application.events as unknown as {
+                  id: string;
+                  name: string;
+                  start_at: string | null;
+                  location: string | null;
+                } | null;
+                return (
+                  <li key={application.id} className="flex items-center justify-between gap-4 px-6 py-4">
+                    <div>
+                      <p className="text-sm font-semibold text-ink-900">{pastEvent?.name ?? "Event"}</p>
+                      <p className="text-xs text-ink-400">
+                        {pastEvent?.location ?? "—"} · {formatDate(pastEvent?.start_at)}
+                      </p>
+                    </div>
+                    <Badge className="border-ink-200 bg-ink-50 text-ink-700">
+                      {APPLICATION_STATUS_LABELS[application.status]}
+                    </Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

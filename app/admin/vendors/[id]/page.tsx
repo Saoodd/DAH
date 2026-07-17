@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSignedFileUrl } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { VendorActions } from "@/components/admin/vendor-actions";
 import { APPROVAL_STATUS_COLORS, APPROVAL_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 
@@ -47,6 +48,8 @@ export default async function AdminVendorDetailPage({ params }: { params: Promis
           {APPROVAL_STATUS_LABELS[business.approval_status]}
         </Badge>
       </div>
+
+      <VendorActions businessId={business.id} status={business.approval_status} />
 
       {business.approval_status === "rejected" && business.rejection_reason && (
         <Card>

@@ -1,5 +1,19 @@
 export const SITE_NAME = "Dar Al Hay Events";
 
+export const EVENT_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  open: "Registration Open",
+  closed: "Registration Closed",
+  archived: "Archived",
+};
+
+export const EVENT_STATUS_COLORS: Record<string, string> = {
+  draft: "bg-neutral-100 text-neutral-700 border-neutral-300",
+  open: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  closed: "bg-amber-100 text-amber-800 border-amber-300",
+  archived: "bg-neutral-200 text-neutral-600 border-neutral-300",
+};
+
 export const APPROVAL_STATUS_LABELS: Record<string, string> = {
   profile_incomplete: "Profile Incomplete",
   pending_review: "Pending Review",

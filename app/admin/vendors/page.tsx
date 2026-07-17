@@ -2,10 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { VendorsTable } from "@/components/admin/vendors-table";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { APPROVAL_STATUS_COLORS, APPROVAL_STATUS_LABELS } from "@/lib/constants";
-import { formatDate } from "@/lib/format";
+import { APPROVAL_STATUS_LABELS } from "@/lib/constants";
 import type { ApprovalStatus } from "@/types/database";
 
 export const metadata: Metadata = { title: "Vendors" };
@@ -52,61 +52,33 @@ export default async function AdminVendorsPage({
         <p className="mt-1 text-sm text-ink-500">All registered businesses.</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((s) => (
-          <Link
-            key={s}
-            href={s === "all" ? "/admin/vendors" : `/admin/vendors?status=${s}`}
-            className={cn(
-              "rounded-full border px-3 py-1.5 text-xs font-medium",
-              status === s ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 text-ink-600 hover:bg-ink-50"
-            )}
-          >
-            {s === "all" ? "All" : APPROVAL_STATUS_LABELS[s]}
-          </Link>
-        ))}
-      </div>
+      <form className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
+          {STATUS_FILTERS.map((s) => (
+            <Link
+              key={s}
+              href={{
+                pathname: "/admin/vendors",
+                query: { ...(s !== "all" ? { status: s } : {}), ...(params.q ? { q: params.q } : {}) },
+              }}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-xs font-medium",
+                status === s ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 text-ink-600 hover:bg-ink-50"
+              )}
+            >
+              {s === "all" ? "All" : APPROVAL_STATUS_LABELS[s]}
+            </Link>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          {status !== "all" && <input type="hidden" name="status" value={status} />}
+          <Input name="q" defaultValue={params.q} placeholder="Search name, owner, email…" className="sm:w-64" />
+        </div>
+      </form>
 
       <Card>
         <CardContent className="p-0">
-          {!businesses?.length ? (
-            <p className="px-6 py-8 text-center text-sm text-ink-400">No vendors match this filter.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-ink-100 text-left text-xs uppercase tracking-wide text-ink-400">
-                    <th className="px-6 py-3 font-medium">Business</th>
-                    <th className="px-6 py-3 font-medium">Contact</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
-                    <th className="px-6 py-3 font-medium">Joined</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-ink-100">
-                  {businesses.map((b) => (
-                    <tr key={b.id} className="hover:bg-ink-50">
-                      <td className="px-6 py-4">
-                        <Link href={`/admin/vendors/${b.id}`} className="font-medium text-ink-900 hover:text-brand-600">
-                          {b.business_name}
-                        </Link>
-                        <p className="text-xs text-ink-400">{b.owner_name}</p>
-                      </td>
-                      <td className="px-6 py-4 text-ink-600">
-                        <p>{b.email}</p>
-                        <p className="text-xs text-ink-400">{b.phone}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge className={APPROVAL_STATUS_COLORS[b.approval_status]}>
-                          {APPROVAL_STATUS_LABELS[b.approval_status]}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-ink-500">{formatDate(b.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <VendorsTable businesses={businesses ?? []} />
         </CardContent>
       </Card>
     </div>

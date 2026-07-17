@@ -195,3 +195,72 @@ export async function submitProfileForReviewAction(): Promise<ActionResult> {
   revalidatePath("/vendor");
   return { ok: true };
 }
+
+export async function applyToEventAction(eventId: string): Promise<ActionResult> {
+  const { authUser } = await requireVendor();
+  const supabase = await createClient();
+
+  const { data: business } = await supabase
+    .from("businesses")
+    .select("id, approval_status, requires_reapproval")
+    .eq("owner_id", authUser.id)
+    .maybeSingle();
+
+  if (!business) return fail("Complete your business profile first.");
+  if (business.approval_status !== "approved") {
+    return fail("Your business must be approved before applying to an event.");
+  }
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, registration_status")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (!event || event.registration_status !== "open") {
+    return fail("This event is not currently open for registration.");
+  }
+
+  const { data: existing } = await supabase
+    .from("applications")
+    .select("id, status")
+    .eq("event_id", eventId)
+    .eq("business_id", business.id)
+    .maybeSingle();
+
+  if (existing && existing.status !== "not_started") {
+    return fail("You've already applied to this event.");
+  }
+
+  // A vendor who is already approved at the business level doesn't need a
+  // second manual review for a routine event — unless the admin has flagged
+  // their profile for reapproval (e.g. after a material profile edit), in
+  // which case the application waits in "submitted" for admin action.
+  const now = new Date().toISOString();
+  const autoApprove = !business.requires_reapproval;
+  const applicationUpdate = {
+    event_id: eventId,
+    business_id: business.id,
+    status: autoApprove ? "approved" : "submitted",
+    submitted_at: now,
+    reviewed_at: autoApprove ? now : null,
+  } as const;
+
+  const { error } = existing
+    ? await supabase.from("applications").update(applicationUpdate).eq("id", existing.id)
+    : await supabase.from("applications").insert(applicationUpdate);
+
+  if (error) return fail("Could not submit your application. Please try again.");
+
+  await logAudit(supabase, {
+    actorId: authUser.id,
+    actorRole: "vendor",
+    action: "application.submitted",
+    entityType: "application",
+    entityId: existing?.id ?? null,
+    newValue: { event_id: eventId, status: applicationUpdate.status },
+  });
+
+  revalidatePath("/vendor");
+  return { ok: true };
+}
