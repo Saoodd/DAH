@@ -12,19 +12,27 @@ Built with Next.js (App Router) + TypeScript + Tailwind CSS + Supabase
 
 This is being built in phases. See the commit history for what's shipped.
 
-- **Phase 1 (this build): Foundation** — deployment fix, authentication,
-  permanent business profiles, vendor/admin roles, full database schema for
-  the whole platform (events, booths, locks, applications, payments,
-  waiting list, notifications, audit log, setup checklist), and a basic
+- **Phase 1: Foundation** — deployment fix, authentication, permanent
+  business profiles, vendor/admin roles, full database schema for the
+  whole platform (events, booths, locks, applications, payments, waiting
+  list, notifications, audit log, setup checklist), and a basic
   vendor/admin dashboard shell.
-- **Phase 2 (next): Approval workflow, events, applications**
-- **Phase 3: Interactive booth map, 5-minute locking, recommendations**
-- **Phase 4: Payments (ADCB Pace Pay + IBAN), expiry**
+- **Phase 2: Approval workflow, events, applications** — admin
+  approve/reject/suspend/blacklist/reconsider with audit logging, event
+  CRUD (create/edit/duplicate/archive, open/close registration), and the
+  vendor application flow (apply → auto-approve or admin review).
+- **Phase 3: Interactive booth map, 5-minute locking, recommendations** —
+  cinema-style zoom/pan floor plan with live (Realtime) status updates,
+  a database-enforced 5-minute lock so two vendors can't win the same
+  booth, booth changes, and a rule-based (no AI) recommendation engine.
+  Full admin booth map builder (drag/resize/duplicate/delete, zones, map
+  features, hold/reserve/confirm/release/swap).
+- **Phase 4 (next): Payments (ADCB Pace Pay + IBAN), expiry**
 - **Phase 5: Waiting list, notifications, export centre, setup check-in**
 - **Phase 6: Audit log UI, analytics, testing, security review**
 
 The database schema for the entire platform (all phases) is created in
-`supabase/migrations/0001_init.sql` and `0002_storage.sql` up front, so
+`supabase/migrations/0001_init.sql`–`0004_realtime.sql` up front, so
 later phases add application code rather than risky incremental schema
 changes.
 
