@@ -34,13 +34,38 @@ This is being built in phases. See the commit history for what's shipped.
   upload, admin verification); self-healing expiry that releases the
   booth and preserves the application; admin confirm/reject/extend/
   reopen/refund/offline-payment controls.
-- **Phase 5 (next): Waiting list, notifications, export centre, setup check-in**
+- **Phase 5: Waiting list, notifications, export centre, setup check-in** —
+  waiting list with priority reordering, admin-invited time-limited booth
+  offers (auto-released if not accepted); notification system with
+  editable templates, an Email/SMS/WhatsApp provider abstraction that
+  logs to a dev console when no provider is configured (never fakes a
+  send), wired into ~10 key events (approval, rejection, booth locked,
+  payment required/approved/rejected, receipt received, booth released,
+  waiting-list joined/invited) plus an admin broadcast composer; a CSV
+  export centre with column selection across 11 datasets (vendors,
+  waiting list, booth assignments/availability, payments, revenue,
+  category breakdown, setup-day list, contacts); mobile-friendly
+  setup-day checklist with a QR code per confirmed vendor.
 - **Phase 6: Audit log UI, analytics, testing, security review**
 
 The database schema for the entire platform (all phases) is created in
-`supabase/migrations/0001_init.sql`–`0006_confirm_booth_creates_payment.sql`
+`supabase/migrations/0001_init.sql`–`0007_waiting_list_functions.sql`
 up front, so later phases add application code rather than risky
 incremental schema changes.
+
+### Notes on Phase 5 scope decisions
+
+- **CSV, not .xlsx**: the only maintained Node library for writing real
+  `.xlsx` files (`xlsx`/SheetJS) has an unpatched high-severity
+  prototype-pollution advisory with no fix on npm. Exports are CSV
+  instead — it opens natively in Excel and Google Sheets and avoids
+  shipping a known-vulnerable dependency.
+- **Time-based reminders not wired**: "payment deadline reminder",
+  "event reminder", and "setup reminder" need a scheduler firing on a
+  timer, not a user action. Vercel Cron's free tier only supports daily
+  jobs, which isn't reliable enough for these, so they're intentionally
+  not implemented rather than faked. Every other notification in section
+  15 is triggered by a real action and is wired up.
 
 ## Why the homepage previously 404'd
 

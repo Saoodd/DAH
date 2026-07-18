@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireVendor } from "@/lib/dal";
+import { requireOwnedBusiness, requireVendor } from "@/lib/dal";
+import { sendNotification } from "@/lib/notifications";
 import type { ActionResult } from "@/app/auth/actions";
 
 const FRIENDLY_ERRORS: Record<string, string> = {
@@ -24,10 +25,18 @@ function translateError(error: { message: string } | null): string {
 }
 
 export async function lockBoothAction(boothId: string, lockMinutes: number): Promise<ActionResult> {
-  await requireVendor();
+  const business = await requireOwnedBusiness();
   const supabase = await createClient();
-  const { error } = await supabase.rpc("lock_booth", { p_booth_id: boothId, p_lock_minutes: lockMinutes });
+  const { data: booth, error } = await supabase.rpc("lock_booth", { p_booth_id: boothId, p_lock_minutes: lockMinutes });
   if (error) return { ok: false, error: translateError(error) };
+
+  await sendNotification(supabase, {
+    businessId: business.id,
+    templateKey: "booth_locked",
+    variables: { booth_number: booth?.booth_number ?? "", minutes: String(lockMinutes) },
+    channels: ["email"],
+  });
+
   revalidatePath("/vendor/booths");
   revalidatePath("/vendor");
   return { ok: true };
@@ -44,10 +53,21 @@ export async function releaseBoothLockAction(boothId: string): Promise<ActionRes
 }
 
 export async function confirmBoothSelectionAction(boothId: string): Promise<ActionResult> {
-  await requireVendor();
+  const business = await requireOwnedBusiness();
   const supabase = await createClient();
-  const { error } = await supabase.rpc("confirm_booth_selection", { p_booth_id: boothId });
+  const { data: booth, error } = await supabase.rpc("confirm_booth_selection", { p_booth_id: boothId });
   if (error) return { ok: false, error: translateError(error) };
+
+  const { data: event } = await supabase.from("events").select("payment_deadline_minutes").eq("id", booth?.event_id ?? "").maybeSingle();
+  await sendNotification(supabase, {
+    businessId: business.id,
+    templateKey: "payment_required",
+    variables: {
+      booth_number: booth?.booth_number ?? "",
+      minutes: String(event?.payment_deadline_minutes ?? 60),
+    },
+  });
+
   revalidatePath("/vendor/booths");
   revalidatePath("/vendor");
   return { ok: true };

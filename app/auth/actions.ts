@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadOwnedFile } from "@/lib/storage";
 import { logAudit } from "@/lib/audit";
+import { sendNotification } from "@/lib/notifications";
 import { getSiteUrl } from "@/lib/env";
 import { normalizeUaePhone } from "@/lib/format";
 import {
@@ -137,20 +138,24 @@ export async function signupAction(formData: FormData): Promise<ActionResult> {
       productPhotoUrls.push(admin.storage.from("product-photos").getPublicUrl(path).data.publicUrl);
     }
 
-    const { error: insertError } = await admin.from("businesses").insert({
-      owner_id: userId,
-      business_name: data.businessName,
-      owner_name: data.ownerName,
-      email: data.email,
-      phone: normalizedPhone,
-      instagram_username: data.instagramUsername ? data.instagramUsername.replace(/^@/, "") : null,
-      category_id: data.categoryId,
-      description: data.description,
-      logo_url: logoUrl,
-      trade_license_url: tradeLicenseUrl,
-      product_photo_urls: productPhotoUrls,
-      approval_status: "profile_incomplete",
-    });
+    const { data: newBusiness, error: insertError } = await admin
+      .from("businesses")
+      .insert({
+        owner_id: userId,
+        business_name: data.businessName,
+        owner_name: data.ownerName,
+        email: data.email,
+        phone: normalizedPhone,
+        instagram_username: data.instagramUsername ? data.instagramUsername.replace(/^@/, "") : null,
+        category_id: data.categoryId,
+        description: data.description,
+        logo_url: logoUrl,
+        trade_license_url: tradeLicenseUrl,
+        product_photo_urls: productPhotoUrls,
+        approval_status: "profile_incomplete",
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
       if (insertError.code === "23505") {
@@ -164,9 +169,11 @@ export async function signupAction(formData: FormData): Promise<ActionResult> {
       actorRole: "vendor",
       action: "business.created",
       entityType: "business",
-      entityId: userId,
+      entityId: newBusiness.id,
       newValue: { business_name: data.businessName, email: data.email },
     });
+
+    await sendNotification(admin, { businessId: newBusiness.id, templateKey: "account_created" });
   } catch (err) {
     console.error("Signup profile creation failed", err);
     return fail("Your account was created but we couldn't save your profile. Please contact support.");

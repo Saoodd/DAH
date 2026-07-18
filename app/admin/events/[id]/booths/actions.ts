@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
+import { sendNotification } from "@/lib/notifications";
 import { boothFormSchema, zoneFormSchema, mapFeatureFormSchema } from "@/lib/validations/booth";
 import type { ActionResult } from "@/app/auth/actions";
 import type { BoothStatus, Database } from "@/types/database";
@@ -272,7 +273,7 @@ export async function adminReleaseBoothAction(boothId: string, eventId: string, 
 
   const { data: existing } = await supabase
     .from("booths")
-    .select("status, current_application_id")
+    .select("status, booth_number, current_application_id")
     .eq("id", boothId)
     .maybeSingle();
   if (!existing) return fail("Booth not found.");
@@ -290,10 +291,20 @@ export async function adminReleaseBoothAction(boothId: string, eventId: string, 
   if (error) return fail("Could not release this booth.");
 
   if (existing.current_application_id) {
-    await supabase
+    const { data: releasedApplication } = await supabase
       .from("applications")
       .update({ booth_id: null, booth_price_before_vat: null, vat_amount: null, total_amount: null, status: "approved" })
-      .eq("id", existing.current_application_id);
+      .eq("id", existing.current_application_id)
+      .select("business_id")
+      .single();
+
+    if (releasedApplication) {
+      await sendNotification(supabase, {
+        businessId: releasedApplication.business_id,
+        templateKey: "booth_released",
+        variables: { booth_number: existing.booth_number },
+      });
+    }
   }
 
   await logAudit(supabase, {

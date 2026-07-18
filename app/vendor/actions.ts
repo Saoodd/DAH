@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { uploadOwnedFile } from "@/lib/storage";
 import { logAudit } from "@/lib/audit";
+import { sendNotification } from "@/lib/notifications";
 import { requireVendor } from "@/lib/dal";
 import { normalizeUaePhone } from "@/lib/format";
 import { businessProfileSchema } from "@/lib/validations/business";
@@ -191,6 +192,8 @@ export async function submitProfileForReviewAction(): Promise<ActionResult> {
     previousValue: { approval_status: business.approval_status },
     newValue: { approval_status: "pending_review" },
   });
+
+  await sendNotification(supabase, { businessId: business.id, templateKey: "profile_submitted" });
 
   revalidatePath("/vendor");
   return { ok: true };

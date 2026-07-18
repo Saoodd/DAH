@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
 import { FloorPlan, type BoothWithRecommendation } from "@/components/vendor/floor-plan";
+import { WaitingListPanel } from "@/components/vendor/waiting-list-panel";
 import { getBoothRecommendation, getNearbyOccupants } from "@/lib/recommendations";
 import { APPLICATION_STATUS_LABELS } from "@/lib/constants";
 
@@ -54,8 +55,9 @@ export default async function VendorBoothsPage() {
   }
 
   await supabase.rpc("release_expired_booth_locks", { p_event_id: event.id });
+  await supabase.rpc("release_expired_invitations", { p_event_id: event.id });
 
-  const [{ data: booths }, { data: zones }, { data: mapFeatures }, rule] = await Promise.all([
+  const [{ data: booths }, { data: zones }, { data: mapFeatures }, rule, { data: waitingListEntry }] = await Promise.all([
     supabase.from("booths").select("*").eq("event_id", event.id).order("booth_number"),
     supabase.from("zones").select("*").eq("event_id", event.id),
     supabase.from("map_features").select("*").eq("event_id", event.id),
@@ -68,6 +70,7 @@ export default async function VendorBoothsPage() {
           .maybeSingle()
           .then((r) => r.data)
       : Promise.resolve(null),
+    supabase.from("waiting_list").select("*").eq("event_id", event.id).eq("business_id", business.id).maybeSingle(),
   ]);
 
   // Which categories currently occupy which booths (for "avoid adjacent same category").
@@ -97,6 +100,10 @@ export default async function VendorBoothsPage() {
     return { ...booth, ...recommendation };
   });
 
+  const invitedBooth = waitingListEntry?.invited_booth_id
+    ? allBooths.find((b) => b.id === waitingListEntry.invited_booth_id)
+    : null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -109,6 +116,16 @@ export default async function VendorBoothsPage() {
         <h1 className="text-2xl font-semibold text-ink-950">Select your booth</h1>
         <p className="mt-1 text-sm text-ink-500">Tap a booth to see details. Zoom and pan to explore the floor plan.</p>
       </div>
+
+      {!application.booth_id && (
+        <WaitingListPanel
+          eventId={event.id}
+          entry={waitingListEntry ?? null}
+          zones={zones ?? []}
+          boothLockMinutes={event.booth_lock_minutes}
+          invitedBoothNumber={invitedBooth?.booth_number ?? null}
+        />
+      )}
 
       <Card>
         <CardContent className="p-4 sm:p-6">

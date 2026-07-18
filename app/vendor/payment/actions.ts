@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireVendor } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
+import { sendNotification } from "@/lib/notifications";
 import { uploadOwnedFile } from "@/lib/storage";
 import { bankTransferSchema, adcbReferenceSchema, MAX_RECEIPT_SIZE_BYTES, ACCEPTED_RECEIPT_TYPES } from "@/lib/validations/payment";
 import type { ActionResult } from "@/app/auth/actions";
@@ -110,6 +111,8 @@ export async function submitBankTransferReceiptAction(paymentId: string, formDat
     entityId: paymentId,
     newValue: { method: "bank_transfer", transfer_reference: parsed.data.transferReference },
   });
+
+  await sendNotification(supabase, { businessId: business.id, templateKey: "receipt_received" });
 
   revalidatePath("/vendor/payment");
   revalidatePath("/vendor");

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
+import { sendNotification } from "@/lib/notifications";
 import type { ActionResult } from "@/app/auth/actions";
 import type { ApprovalStatus, Database } from "@/types/database";
 
@@ -45,6 +46,16 @@ async function transitionBusiness(
     previousValue: { approval_status: business.approval_status },
     newValue: { approval_status: nextStatus, reason: options.reason ?? null },
   });
+
+  if (nextStatus === "approved") {
+    await sendNotification(supabase, { businessId, templateKey: "business_approved" });
+  } else if (nextStatus === "rejected") {
+    await sendNotification(supabase, {
+      businessId,
+      templateKey: "business_rejected",
+      variables: { reason: options.reason ?? "" },
+    });
+  }
 
   revalidatePath("/admin/vendors");
   revalidatePath(`/admin/vendors/${businessId}`);

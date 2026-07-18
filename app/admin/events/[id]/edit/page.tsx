@@ -40,6 +40,12 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
             <Link href={`/admin/events/${event.id}/payments`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
               Payments
             </Link>
+            <Link href={`/admin/events/${event.id}/waiting-list`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+              Waiting list
+            </Link>
+            <Link href={`/admin/events/${event.id}/setup`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+              Setup check-in
+            </Link>
           </div>
         </div>
         <EventActions eventId={event.id} status={event.registration_status} />

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
+import { sendNotification } from "@/lib/notifications";
 import type { ActionResult } from "@/app/auth/actions";
 
 function fail(error: string): ActionResult {
@@ -52,6 +53,8 @@ export async function confirmPaymentAction(paymentId: string, eventId: string): 
     newValue: { status: "paid" },
   });
 
+  await sendNotification(supabase, { businessId: application.business_id, templateKey: "payment_approved" });
+
   revalidatePath(`/admin/events/${eventId}/payments`);
   revalidatePath(`/admin/events/${eventId}/applications`);
   return { ok: true };
@@ -62,14 +65,27 @@ export async function rejectReceiptAction(paymentId: string, eventId: string, re
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: payment } = await supabase.from("payments").select("status").eq("id", paymentId).maybeSingle();
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("status, applications(business_id)")
+    .eq("id", paymentId)
+    .maybeSingle();
   if (!payment) return fail("Payment not found.");
+  const paymentApplication = payment.applications as unknown as { business_id: string } | null;
 
   const { error } = await supabase
     .from("payments")
     .update({ status: "payment_required", rejection_reason: reason.trim() })
     .eq("id", paymentId);
   if (error) return fail("Could not reject this receipt.");
+
+  if (paymentApplication) {
+    await sendNotification(supabase, {
+      businessId: paymentApplication.business_id,
+      templateKey: "payment_rejected",
+      variables: { reason },
+    });
+  }
 
   await logAudit(supabase, {
     actorId: authUser.id,

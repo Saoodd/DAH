@@ -466,6 +466,8 @@ export interface Database {
       };
       release_expired_booth_locks: { Args: { p_event_id?: string | null }; Returns: number };
       expire_overdue_payments: { Args: { p_event_id?: string | null }; Returns: number };
+      decline_booth_invitation: { Args: { p_waiting_list_id: string }; Returns: undefined };
+      release_expired_invitations: { Args: { p_event_id?: string | null }; Returns: number };
     };
     Enums: Record<string, never>;
   };
