@@ -1,10 +1,19 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
-import { APPROVAL_STATUS_COLORS, APPROVAL_STATUS_LABELS, BOOTH_STATUS_LABELS } from "@/lib/constants";
+import { StatCard } from "@/components/ui/stat-card";
+import { BarList } from "@/components/ui/bar-list";
+import {
+  APPROVAL_STATUS_COLORS,
+  APPROVAL_STATUS_LABELS,
+  BOOTH_STATUS_LABELS,
+  PAYMENT_STATUS_COLORS,
+  PAYMENT_STATUS_LABELS,
+} from "@/lib/constants";
 import { formatAED, formatDate } from "@/lib/format";
 import type { ApprovalStatus } from "@/types/database";
 
@@ -12,6 +21,42 @@ export const metadata: Metadata = { title: "Admin Dashboard" };
 
 function minutesFromNowIso(minutes: number) {
   return new Date(Date.now() + minutes * 60_000).toISOString();
+}
+
+const icons = {
+  building: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"
+    />
+  ),
+  clock: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />,
+  check: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m6.75 2.25a10 10 0 11-20 0 10 10 0 0120 0z" />,
+  x: <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
+  shield: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M9 12.75L11.25 15 15 9.75m5.706-3.905a1.5 1.5 0 00-1.5-1.5H4.794a1.5 1.5 0 00-1.5 1.5v.75a15.75 15.75 0 008.706 14.14 1.5 1.5 0 001-.001A15.75 15.75 0 0020.706 7.6v-.75z"
+    />
+  ),
+  chart: <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.5l4.5-4.5 4 4L21 4m0 0h-5.25M21 4v5.25M3 20.25h18" />,
+  cash: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M2.25 8.25h19.5M2.25 8.25v10.5a1.5 1.5 0 001.5 1.5h16.5a1.5 1.5 0 001.5-1.5V8.25M2.25 8.25l1.72-3.44a1.5 1.5 0 011.34-.81h13.38a1.5 1.5 0 011.34.81l1.72 3.44M12 15a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z"
+    />
+  ),
+};
+
+function Icon({ path }: { path: ReactNode }) {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden="true">
+      {path}
+    </svg>
+  );
 }
 
 async function countByStatus(
@@ -45,12 +90,18 @@ export default async function AdminDashboardPage() {
       .limit(6),
   ]);
 
-  const stats = [
-    { label: "Total businesses", value: total },
-    { label: "Pending review", value: pendingReview, href: "/admin/vendors?status=pending_review" },
-    { label: "Approved vendors", value: approved, href: "/admin/vendors?status=approved" },
-    { label: "Rejected", value: rejected, href: "/admin/vendors?status=rejected" },
-    { label: "Suspended / blacklisted", value: suspendedOrBlacklisted },
+  const stats: Array<{
+    label: string;
+    value: number;
+    href?: string;
+    icon: ReactNode;
+    tone: "default" | "brand" | "success" | "warning" | "danger";
+  }> = [
+    { label: "Total businesses", value: total, icon: icons.building, tone: "default" },
+    { label: "Pending review", value: pendingReview, href: "/admin/vendors?status=pending_review", icon: icons.clock, tone: "warning" },
+    { label: "Approved vendors", value: approved, href: "/admin/vendors?status=approved", icon: icons.check, tone: "success" },
+    { label: "Rejected", value: rejected, href: "/admin/vendors?status=rejected", icon: icons.x, tone: "danger" },
+    { label: "Suspended / blacklisted", value: suspendedOrBlacklisted, icon: icons.shield, tone: "default" },
   ];
 
   const { data: openEvent } = await supabase
@@ -147,37 +198,44 @@ export default async function AdminDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-ink-950">Admin dashboard</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink-950">Admin dashboard</h1>
         <p className="mt-1 text-sm text-ink-500">Live counts from the vendor database.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        {stats.map((stat) => {
-          const content = (
-            <Card key={stat.label} className="h-full">
-              <CardContent className="py-5">
-                <p className="text-2xl font-semibold text-ink-950">{stat.value}</p>
-                <p className="mt-1 text-sm text-ink-500">{stat.label}</p>
-              </CardContent>
-            </Card>
-          );
-          return stat.href ? (
-            <Link key={stat.label} href={stat.href} className="block">
-              {content}
-            </Link>
-          ) : (
-            content
-          );
-        })}
-      </div>
+      <section>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Vendor pipeline</h2>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          {stats.map((stat) => (
+            <StatCard
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              href={stat.href}
+              tone={stat.tone}
+              icon={<Icon path={stat.icon} />}
+            />
+          ))}
+        </div>
+      </section>
 
       {eventStats && openEvent && (
-        <>
-          <div>
-            <h2 className="text-lg font-semibold text-ink-950">{openEvent.name}</h2>
-            <p className="text-sm text-ink-500">Currently open for registration.</p>
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold tracking-tight text-ink-950">{openEvent.name}</h2>
+                <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800">Open for registration</Badge>
+              </div>
+              <p className="text-sm text-ink-500">Live snapshot of booths, revenue, and applications.</p>
+            </div>
+            <Link
+              href={`/admin/events/${openEvent.id}/edit`}
+              className="text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              Manage event →
+            </Link>
           </div>
 
           {eventStats.expiringHolds > 0 && (
@@ -187,30 +245,10 @@ export default async function AdminDashboardPage() {
           )}
 
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Card>
-              <CardContent className="py-5">
-                <p className="text-2xl font-semibold text-ink-950">{eventStats.capacityPercent}%</p>
-                <p className="mt-1 text-sm text-ink-500">Event capacity</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="py-5">
-                <p className="text-2xl font-semibold text-ink-950">{formatAED(eventStats.expectedRevenue)}</p>
-                <p className="mt-1 text-sm text-ink-500">Expected revenue</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="py-5">
-                <p className="text-2xl font-semibold text-emerald-700">{formatAED(eventStats.collectedRevenue)}</p>
-                <p className="mt-1 text-sm text-ink-500">Collected</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="py-5">
-                <p className="text-2xl font-semibold text-amber-700">{formatAED(eventStats.pendingAmount)}</p>
-                <p className="mt-1 text-sm text-ink-500">Pending</p>
-              </CardContent>
-            </Card>
+            <StatCard label="Event capacity" value={`${eventStats.capacityPercent}%`} icon={<Icon path={icons.chart} />} tone="brand" />
+            <StatCard label="Expected revenue" value={formatAED(eventStats.expectedRevenue)} icon={<Icon path={icons.cash} />} tone="default" />
+            <StatCard label="Collected" value={formatAED(eventStats.collectedRevenue)} icon={<Icon path={icons.check} />} tone="success" />
+            <StatCard label="Pending" value={formatAED(eventStats.pendingAmount)} icon={<Icon path={icons.clock} />} tone="warning" />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -218,29 +256,28 @@ export default async function AdminDashboardPage() {
               <CardHeader>
                 <CardTitle>Booths by status</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {Object.entries(eventStats.boothCounts).map(([status, count]) => (
-                  <div key={status} className="flex items-center justify-between text-sm">
-                    <span className="text-ink-600">{BOOTH_STATUS_LABELS[status] ?? status}</span>
-                    <span className="font-medium text-ink-900">{count}</span>
-                  </div>
-                ))}
-                {eventStats.totalBooths === 0 && <p className="text-sm text-ink-400">No booths created yet.</p>}
+              <CardContent>
+                <BarList
+                  emptyLabel="No booths created yet."
+                  items={Object.entries(eventStats.boothCounts).map(([status, count]) => ({
+                    label: BOOTH_STATUS_LABELS[status] ?? status,
+                    value: count,
+                  }))}
+                />
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Category distribution</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {eventStats.categoryBreakdown.map((c) => (
-                  <div key={c.name} className="flex items-center justify-between text-sm">
-                    <span className="text-ink-600">{c.name}</span>
-                    <span className="font-medium text-ink-900">{c.count}</span>
-                  </div>
-                ))}
-                {eventStats.categoryBreakdown.length === 0 && <p className="text-sm text-ink-400">No applications yet.</p>}
-                <p className="pt-2 text-xs text-ink-400">Waiting list: {eventStats.waitingListSize} vendor(s)</p>
+              <CardContent>
+                <BarList
+                  emptyLabel="No applications yet."
+                  items={eventStats.categoryBreakdown.map((c) => ({ label: c.name, value: c.count }))}
+                />
+                <p className="mt-4 border-t border-ink-100 pt-3 text-xs text-ink-400">
+                  Waiting list: <span className="font-medium text-ink-600">{eventStats.waitingListSize} vendor(s)</span>
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -251,14 +288,17 @@ export default async function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="p-0">
               {!eventStats.recentPayments.length ? (
-                <p className="px-6 py-8 text-center text-sm text-ink-400">No payments yet.</p>
+                <p className="px-6 py-10 text-center text-sm text-ink-400">No payments yet.</p>
               ) : (
                 <ul className="divide-y divide-ink-100">
                   {eventStats.recentPayments.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between px-6 py-3 text-sm">
-                      <span className="text-ink-800">{p.business_name}</span>
-                      <span className="text-ink-500">
-                        {formatAED(p.amount)} · {p.status}
+                    <li key={p.id} className="flex items-center justify-between gap-3 px-6 py-3.5 text-sm transition-colors hover:bg-ink-50/60">
+                      <span className="font-medium text-ink-800">{p.business_name}</span>
+                      <span className="flex items-center gap-2.5">
+                        <span className="text-ink-500">{formatAED(p.amount)}</span>
+                        <Badge className={PAYMENT_STATUS_COLORS[p.status] ?? ""}>
+                          {PAYMENT_STATUS_LABELS[p.status] ?? p.status}
+                        </Badge>
                       </span>
                     </li>
                   ))}
@@ -266,43 +306,45 @@ export default async function AdminDashboardPage() {
               )}
             </CardContent>
           </Card>
-        </>
+        </section>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Recent registrations</CardTitle>
-          <Link href="/admin/vendors" className="text-sm font-medium text-brand-600 hover:text-brand-700">
-            View all
-          </Link>
-        </CardHeader>
-        <CardContent className="p-0">
-          {!recent.data?.length ? (
-            <p className="px-6 py-8 text-center text-sm text-ink-400">No businesses have signed up yet.</p>
-          ) : (
-            <ul className="divide-y divide-ink-100">
-              {recent.data.map((b) => (
-                <li key={b.id}>
-                  <Link
-                    href={`/admin/vendors/${b.id}`}
-                    className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-ink-50"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-ink-900">{b.business_name}</p>
-                      <p className="text-xs text-ink-400">
-                        {b.owner_name} · {formatDate(b.created_at)}
-                      </p>
-                    </div>
-                    <Badge className={APPROVAL_STATUS_COLORS[b.approval_status]}>
-                      {APPROVAL_STATUS_LABELS[b.approval_status]}
-                    </Badge>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <section>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Recent registrations</CardTitle>
+            <Link href="/admin/vendors" className="text-sm font-medium text-brand-600 hover:text-brand-700">
+              View all
+            </Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            {!recent.data?.length ? (
+              <p className="px-6 py-10 text-center text-sm text-ink-400">No businesses have signed up yet.</p>
+            ) : (
+              <ul className="divide-y divide-ink-100">
+                {recent.data.map((b) => (
+                  <li key={b.id}>
+                    <Link
+                      href={`/admin/vendors/${b.id}`}
+                      className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-ink-50/60"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-ink-900">{b.business_name}</p>
+                        <p className="text-xs text-ink-400">
+                          {b.owner_name} · {formatDate(b.created_at)}
+                        </p>
+                      </div>
+                      <Badge className={APPROVAL_STATUS_COLORS[b.approval_status]}>
+                        {APPROVAL_STATUS_LABELS[b.approval_status]}
+                      </Badge>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }
