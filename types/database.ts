@@ -468,6 +468,43 @@ export interface Database {
       expire_overdue_payments: { Args: { p_event_id?: string | null }; Returns: number };
       decline_booth_invitation: { Args: { p_waiting_list_id: string }; Returns: undefined };
       release_expired_invitations: { Args: { p_event_id?: string | null }; Returns: number };
+      apply_to_event: { Args: { p_event_id: string }; Returns: Database["public"]["Tables"]["applications"]["Row"] };
+      submit_adcb_payment_reference: {
+        Args: { p_payment_id: string; p_reference: string };
+        Returns: Database["public"]["Tables"]["payments"]["Row"];
+      };
+      submit_bank_transfer_receipt: {
+        Args: { p_payment_id: string; p_receipt_path: string; p_transfer_reference: string; p_transfer_date: string };
+        Returns: Database["public"]["Tables"]["payments"]["Row"];
+      };
+      join_waiting_list: {
+        Args: {
+          p_event_id: string;
+          p_preferred_booth_size?: string | null;
+          p_max_budget?: number | null;
+          p_preferred_zone_id?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["waiting_list"]["Row"];
+      };
+      update_business_profile: {
+        Args: {
+          p_business_name: string;
+          p_owner_name: string;
+          p_email: string;
+          p_phone: string;
+          p_instagram_username: string | null;
+          p_category_id: string;
+          p_description: string;
+          p_logo_url?: string | null;
+          p_trade_license_url?: string | null;
+          p_new_product_photo_urls?: string[] | null;
+        };
+        Returns: Database["public"]["Tables"]["businesses"]["Row"];
+      };
+      submit_business_profile_for_review: {
+        Args: Record<string, never>;
+        Returns: Database["public"]["Tables"]["businesses"]["Row"];
+      };
     };
     Enums: Record<string, never>;
   };

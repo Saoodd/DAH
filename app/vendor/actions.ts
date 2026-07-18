@@ -8,9 +8,6 @@ import { sendNotification } from "@/lib/notifications";
 import { requireVendor } from "@/lib/dal";
 import { normalizeUaePhone } from "@/lib/format";
 import { businessProfileSchema } from "@/lib/validations/business";
-import type { Database } from "@/types/database";
-
-type BusinessUpdate = Database["public"]["Tables"]["businesses"]["Update"];
 import {
   ACCEPTED_DOCUMENT_TYPES,
   ACCEPTED_IMAGE_TYPES,
@@ -69,17 +66,7 @@ export async function updateBusinessProfileAction(formData: FormData): Promise<A
     }
   }
 
-  const updates: BusinessUpdate = {
-    business_name: data.businessName,
-    owner_name: data.ownerName,
-    email: data.email,
-    phone: normalizedPhone,
-    instagram_username: data.instagramUsername ? data.instagramUsername.replace(/^@/, "") : null,
-    category_id: data.categoryId,
-    description: data.description,
-    last_profile_update: new Date().toISOString(),
-  };
-
+  let logoUrl: string | null = null;
   const logo = formData.get("logo");
   if (logo instanceof File && logo.size > 0) {
     if (logo.size > MAX_LOGO_SIZE_BYTES) return fail("Logo file is too large.", { logo: ["Must be under 3MB."] });
@@ -87,9 +74,10 @@ export async function updateBusinessProfileAction(formData: FormData): Promise<A
       return fail("Unsupported logo format.", { logo: ["Use PNG, JPEG, or WEBP."] });
     }
     const path = await uploadOwnedFile(supabase, "business-logos", authUser.id, logo);
-    updates.logo_url = supabase.storage.from("business-logos").getPublicUrl(path).data.publicUrl;
+    logoUrl = supabase.storage.from("business-logos").getPublicUrl(path).data.publicUrl;
   }
 
+  let tradeLicenseUrl: string | null = null;
   const tradeLicense = formData.get("tradeLicense");
   if (tradeLicense instanceof File && tradeLicense.size > 0) {
     if (tradeLicense.size > MAX_LICENSE_SIZE_BYTES) {
@@ -98,9 +86,10 @@ export async function updateBusinessProfileAction(formData: FormData): Promise<A
     if (!ACCEPTED_DOCUMENT_TYPES.includes(tradeLicense.type)) {
       return fail("Unsupported trade licence format.", { tradeLicense: ["Use PNG, JPEG, WEBP, or PDF."] });
     }
-    updates.trade_license_url = await uploadOwnedFile(supabase, "trade-licenses", authUser.id, tradeLicense);
+    tradeLicenseUrl = await uploadOwnedFile(supabase, "trade-licenses", authUser.id, tradeLicense);
   }
 
+  let newProductPhotoUrls: string[] | null = null;
   const newProductPhotos = formData
     .getAll("productPhotos")
     .filter((f): f is File => f instanceof File && f.size > 0);
@@ -119,16 +108,24 @@ export async function updateBusinessProfileAction(formData: FormData): Promise<A
       const path = await uploadOwnedFile(supabase, "product-photos", authUser.id, photo);
       uploadedUrls.push(supabase.storage.from("product-photos").getPublicUrl(path).data.publicUrl);
     }
-    updates.product_photo_urls = [...existing, ...uploadedUrls];
+    newProductPhotoUrls = uploadedUrls;
   }
 
-  // Material edits to an already-approved profile require the admin to
-  // re-review before the vendor can select a booth again.
-  if (business.approval_status === "approved") {
-    updates.requires_reapproval = true;
-  }
-
-  const { error: updateError } = await supabase.from("businesses").update(updates).eq("id", business.id);
+  // Vendors have no direct UPDATE grant on businesses (migration 0010) —
+  // this function only ever touches profile fields, never approval_status,
+  // so a vendor can't self-approve by calling the table API directly.
+  const { error: updateError } = await supabase.rpc("update_business_profile", {
+    p_business_name: data.businessName,
+    p_owner_name: data.ownerName,
+    p_email: data.email,
+    p_phone: normalizedPhone,
+    p_instagram_username: data.instagramUsername ? data.instagramUsername.replace(/^@/, "") : null,
+    p_category_id: data.categoryId,
+    p_description: data.description,
+    p_logo_url: logoUrl,
+    p_trade_license_url: tradeLicenseUrl,
+    p_new_product_photo_urls: newProductPhotoUrls,
+  });
   if (updateError) {
     if (updateError.code === "23505") {
       return fail("That email or phone number is already in use by another account.");
@@ -149,7 +146,7 @@ export async function updateBusinessProfileAction(formData: FormData): Promise<A
       category_id: business.category_id,
       description: business.description,
     },
-    newValue: updates as never,
+    newValue: { business_name: data.businessName, email: data.email, phone: normalizedPhone, category_id: data.categoryId },
   });
 
   revalidatePath("/vendor");
@@ -172,14 +169,9 @@ export async function submitProfileForReviewAction(): Promise<ActionResult> {
     return fail("Your profile has already been submitted.");
   }
 
-  const { error } = await supabase
-    .from("businesses")
-    .update({
-      approval_status: "pending_review",
-      submitted_at: new Date().toISOString(),
-      requires_reapproval: false,
-    })
-    .eq("id", business.id);
+  // Vendors have no direct UPDATE grant on businesses — this function only
+  // ever moves profile_incomplete/rejected -> pending_review.
+  const { error } = await supabase.rpc("submit_business_profile_for_review");
 
   if (error) return fail("Could not submit your profile. Please try again.");
 
@@ -235,24 +227,11 @@ export async function applyToEventAction(eventId: string): Promise<ActionResult>
     return fail("You've already applied to this event.");
   }
 
-  // A vendor who is already approved at the business level doesn't need a
-  // second manual review for a routine event — unless the admin has flagged
-  // their profile for reapproval (e.g. after a material profile edit), in
-  // which case the application waits in "submitted" for admin action.
-  const now = new Date().toISOString();
-  const autoApprove = !business.requires_reapproval;
-  const applicationUpdate = {
-    event_id: eventId,
-    business_id: business.id,
-    status: autoApprove ? "approved" : "submitted",
-    submitted_at: now,
-    reviewed_at: autoApprove ? now : null,
-  } as const;
-
-  const { error } = existing
-    ? await supabase.from("applications").update(applicationUpdate).eq("id", existing.id)
-    : await supabase.from("applications").insert(applicationUpdate);
-
+  // The actual write happens in a SECURITY DEFINER function (vendors have no
+  // direct INSERT/UPDATE grant on applications — see migration 0008) so it
+  // re-validates business approval, event status, and duplicate-application
+  // rules server-side regardless of what this pre-check already confirmed.
+  const { data: application, error } = await supabase.rpc("apply_to_event", { p_event_id: eventId });
   if (error) return fail("Could not submit your application. Please try again.");
 
   await logAudit(supabase, {
@@ -260,8 +239,8 @@ export async function applyToEventAction(eventId: string): Promise<ActionResult>
     actorRole: "vendor",
     action: "application.submitted",
     entityType: "application",
-    entityId: existing?.id ?? null,
-    newValue: { event_id: eventId, status: applicationUpdate.status },
+    entityId: application?.id ?? null,
+    newValue: { event_id: eventId, status: application?.status },
   });
 
   revalidatePath("/vendor");

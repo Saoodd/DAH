@@ -40,10 +40,14 @@ export async function submitAdcbReferenceAction(paymentId: string, formData: For
   const parsed = adcbReferenceSchema.safeParse({ paymentReference: String(formData.get("paymentReference") ?? "") });
   if (!parsed.success) return fail("Enter a valid payment reference.", parsed.error.flatten().fieldErrors);
 
-  const { error } = await supabase
-    .from("payments")
-    .update({ method: "adcb_pace_pay", status: "pending_payment", payment_reference: parsed.data.paymentReference })
-    .eq("id", paymentId);
+  // Vendors have no direct UPDATE grant on payments (migration 0008) — this
+  // narrow SECURITY DEFINER function re-validates ownership and status
+  // server-side before writing, so a vendor can never mark their own
+  // payment "paid" by calling the table API directly.
+  const { error } = await supabase.rpc("submit_adcb_payment_reference", {
+    p_payment_id: paymentId,
+    p_reference: parsed.data.paymentReference,
+  });
   if (error) return fail("Could not save your payment reference.");
 
   await logAudit(supabase, {
@@ -90,17 +94,12 @@ export async function submitBankTransferReceiptAction(paymentId: string, formDat
 
   const path = await uploadOwnedFile(supabase, "payment-receipts", authUser.id, receipt);
 
-  const { error } = await supabase
-    .from("payments")
-    .update({
-      method: "bank_transfer",
-      status: "pending_verification",
-      receipt_url: path,
-      transfer_reference: parsed.data.transferReference,
-      transfer_date: parsed.data.transferDate,
-      rejection_reason: null,
-    })
-    .eq("id", paymentId);
+  const { error } = await supabase.rpc("submit_bank_transfer_receipt", {
+    p_payment_id: paymentId,
+    p_receipt_path: path,
+    p_transfer_reference: parsed.data.transferReference,
+    p_transfer_date: parsed.data.transferDate,
+  });
   if (error) return fail("Could not save your receipt.");
 
   await logAudit(supabase, {

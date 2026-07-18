@@ -89,6 +89,19 @@ export function BellIcon() {
   );
 }
 
+export function ClipboardListIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M9 12h6m-6 4h6m-7 5h8a2 2 0 002-2V6.5a2 2 0 00-.586-1.414l-2.5-2.5A2 2 0 0013.5 2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+      />
+    </svg>
+  );
+}
+
 export function CalendarIcon() {
   return (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

@@ -64,7 +64,7 @@ export function WaitingListPanel({
   function onAccept() {
     if (!entry?.invited_booth_id) return;
     startTransition(async () => {
-      const result = await acceptInvitationAction(entry.id, entry.invited_booth_id!, boothLockMinutes);
+      const result = await acceptInvitationAction(entry.invited_booth_id!, boothLockMinutes);
       if (!result.ok) {
         toast({ title: "Couldn't accept", description: result.error, variant: "error" });
         return;

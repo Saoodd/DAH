@@ -1,5 +1,3 @@
-import "server-only";
-
 export interface ExportColumn {
   key: string;
   label: string;

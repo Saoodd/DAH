@@ -19,18 +19,14 @@ export async function joinWaitingListAction(eventId: string, formData: FormData)
   const maxBudgetRaw = String(formData.get("maxBudget") ?? "");
   const preferredZoneId = String(formData.get("preferredZoneId") ?? "");
 
-  const { error } = await supabase.from("waiting_list").upsert(
-    {
-      event_id: eventId,
-      business_id: business.id,
-      preferred_booth_size: preferredBoothSize || null,
-      max_budget: maxBudgetRaw ? Number(maxBudgetRaw) : null,
-      preferred_zone_id: preferredZoneId || null,
-      status: "waiting",
-      joined_at: new Date().toISOString(),
-    },
-    { onConflict: "event_id,business_id" }
-  );
+  // Vendors have no direct INSERT/UPDATE grant on waiting_list (migration
+  // 0008) — priority is admin-only, so this can't be used to queue-jump.
+  const { error } = await supabase.rpc("join_waiting_list", {
+    p_event_id: eventId,
+    p_preferred_booth_size: preferredBoothSize || null,
+    p_max_budget: maxBudgetRaw ? Number(maxBudgetRaw) : null,
+    p_preferred_zone_id: preferredZoneId || null,
+  });
   if (error) return fail("Could not join the waiting list.");
 
   await logAudit(supabase, {
@@ -48,14 +44,15 @@ export async function joinWaitingListAction(eventId: string, formData: FormData)
   return { ok: true };
 }
 
-export async function acceptInvitationAction(waitingListId: string, boothId: string, lockMinutes: number): Promise<ActionResult> {
+export async function acceptInvitationAction(boothId: string, lockMinutes: number): Promise<ActionResult> {
   await requireOwnedBusiness();
   const supabase = await createClient();
 
+  // lock_booth (migration 0009) flips the waiting_list row to 'accepted'
+  // itself once it confirms the booth was admin_held for this business —
+  // vendors have no direct UPDATE grant on waiting_list.
   const { error: lockError } = await supabase.rpc("lock_booth", { p_booth_id: boothId, p_lock_minutes: lockMinutes });
   if (lockError) return fail("This booth is no longer available. It may have expired.");
-
-  await supabase.from("waiting_list").update({ status: "accepted" }).eq("id", waitingListId);
 
   revalidatePath("/vendor/booths");
   revalidatePath("/vendor");
