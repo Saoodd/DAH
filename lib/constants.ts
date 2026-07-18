@@ -70,6 +70,41 @@ export const BOOTH_STATUS_COLORS: Record<string, string> = {
   unavailable: "bg-neutral-400",
 };
 
+export const BOOTH_STATUS_BADGE_COLORS: Record<string, string> = {
+  available: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  locked: "bg-amber-100 text-amber-800 border-amber-300",
+  reserved: "bg-blue-100 text-blue-800 border-blue-300",
+  awaiting_payment: "bg-orange-100 text-orange-800 border-orange-300",
+  confirmed: "bg-violet-100 text-violet-800 border-violet-300",
+  admin_held: "bg-slate-100 text-slate-800 border-slate-300",
+  blocked: "bg-red-100 text-red-800 border-red-300",
+  unavailable: "bg-neutral-200 text-neutral-600 border-neutral-300",
+};
+
+export const FEATURE_TAG_LABELS: Record<string, string> = {
+  near_entrance: "Near entrance",
+  near_seating: "Near seating",
+  near_electrical: "Near electrical",
+  food_area: "Food area",
+  clothing_zone: "Clothing zone",
+  coffee_area: "Coffee area",
+  high_traffic: "High traffic",
+  corner: "Corner",
+};
+
+export const MAP_FEATURE_LABELS: Record<string, string> = {
+  entrance: "Entrance",
+  exit: "Exit",
+  loading_bay: "Loading Bay",
+  main_stage: "Main Stage",
+  food_section: "Food Section",
+  clothing_section: "Clothing Section",
+  coffee_area: "Coffee Area",
+  electrical_point: "Electrical Point",
+  restroom: "Restroom",
+  other: "Other",
+};
+
 export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   not_requested: "Not Requested",
   payment_required: "Payment Required",

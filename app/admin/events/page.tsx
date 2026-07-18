@@ -52,12 +52,14 @@ export default async function AdminEventsPage() {
                   <p className="mt-1 text-sm text-ink-500">
                     {event.location ?? "No location set"} · {formatDate(event.start_at)} – {formatDate(event.end_at)}
                   </p>
-                  <Link
-                    href={`/admin/events/${event.id}/applications`}
-                    className="mt-1 inline-block text-sm font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    View applications
-                  </Link>
+                  <div className="mt-1 flex gap-4">
+                    <Link href={`/admin/events/${event.id}/booths`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+                      Booth map
+                    </Link>
+                    <Link href={`/admin/events/${event.id}/applications`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+                      View applications
+                    </Link>
+                  </div>
                 </div>
                 <EventActions eventId={event.id} status={event.registration_status} compact />
               </CardContent>

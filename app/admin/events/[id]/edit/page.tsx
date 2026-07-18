@@ -27,9 +27,17 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
               {EVENT_STATUS_LABELS[event.registration_status]}
             </Badge>
           </div>
-          <Link href={`/admin/events/${event.id}/applications`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
-            View applications
-          </Link>
+          <div className="flex gap-4">
+            <Link href={`/admin/events/${event.id}/booths`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+              Booth map
+            </Link>
+            <Link href={`/admin/events/${event.id}/recommendations`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+              Recommendations
+            </Link>
+            <Link href={`/admin/events/${event.id}/applications`} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+              View applications
+            </Link>
+          </div>
         </div>
         <EventActions eventId={event.id} status={event.registration_status} />
       </div>

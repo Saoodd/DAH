@@ -200,12 +200,12 @@ export default async function VendorDashboardPage() {
                         Reason: {currentApplication.rejection_reason}
                       </p>
                     )}
-                    {currentApplication.status === "approved" && (
-                      <p className="mt-2 text-sm text-ink-500">
-                        Booth selection isn&rsquo;t open yet — we&rsquo;ll let you know as soon as it is.
-                      </p>
-                    )}
                   </div>
+                  {["approved", "booth_selected", "awaiting_payment"].includes(currentApplication.status) && (
+                    <Link href="/vendor/booths" className={buttonVariants({ variant: "primary" })}>
+                      {currentApplication.status === "approved" ? "Select your booth" : "View your booth"}
+                    </Link>
+                  )}
                 </div>
               )}
 

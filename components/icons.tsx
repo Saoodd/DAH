@@ -37,6 +37,19 @@ export function UsersIcon() {
   );
 }
 
+export function MapIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M9 6.75L3.75 9v11.25L9 18m0-11.25l6 3m-6-3v11.25m6-8.25l5.25-2.25v11.25L15 20.25m0-11.25v11.25m0-11.25l-6 3"
+      />
+    </svg>
+  );
+}
+
 export function CalendarIcon() {
   return (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

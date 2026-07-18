@@ -453,6 +453,18 @@ export interface Database {
       owned_business_id: { Args: Record<string, never>; Returns: string };
       check_email_available: { Args: { p_email: string }; Returns: boolean };
       check_phone_available: { Args: { p_phone: string }; Returns: boolean };
+      vat_amount: { Args: { p_price: number }; Returns: number };
+      lock_booth: { Args: { p_booth_id: string; p_lock_minutes?: number }; Returns: Database["public"]["Tables"]["booths"]["Row"] };
+      release_booth_lock: {
+        Args: { p_booth_id: string; p_reason?: string };
+        Returns: Database["public"]["Tables"]["booths"]["Row"];
+      };
+      confirm_booth_selection: { Args: { p_booth_id: string }; Returns: Database["public"]["Tables"]["booths"]["Row"] };
+      change_booth: {
+        Args: { p_old_booth_id: string; p_new_booth_id: string; p_lock_minutes?: number };
+        Returns: Database["public"]["Tables"]["booths"]["Row"];
+      };
+      release_expired_booth_locks: { Args: { p_event_id?: string | null }; Returns: number };
     };
     Enums: Record<string, never>;
   };
