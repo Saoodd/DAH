@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { eventFormSchema, type EventFormInput } from "@/lib/validations/event";
 import { createEventAction, updateEventAction } from "@/app/admin/events/actions";
+import { applyServerFieldErrors } from "@/lib/form-errors";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,6 +77,7 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<EventFormInput>({
     resolver: zodResolver(eventFormSchema),
@@ -121,6 +123,7 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
     startTransition(async () => {
       const result = eventId ? await updateEventAction(eventId, formData) : await createEventAction(formData);
       if (result && !result.ok) {
+        applyServerFieldErrors(setError, result.fieldErrors);
         setServerError(result.error);
         return;
       }

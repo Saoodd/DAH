@@ -29,8 +29,8 @@ function parseEventForm(formData: FormData) {
     setupEndAt: String(formData.get("setupEndAt") ?? ""),
     registrationOpensAt: String(formData.get("registrationOpensAt") ?? ""),
     registrationClosesAt: String(formData.get("registrationClosesAt") ?? ""),
-    paymentDeadlineMinutes: formData.get("paymentDeadlineMinutes"),
-    boothLockMinutes: formData.get("boothLockMinutes"),
+    paymentDeadlineMinutes: Number(formData.get("paymentDeadlineMinutes")),
+    boothLockMinutes: Number(formData.get("boothLockMinutes")),
     recommendationsEnabled: formData.get("recommendationsEnabled") === "on",
     boothChangesLocked: formData.get("boothChangesLocked") === "on",
   });

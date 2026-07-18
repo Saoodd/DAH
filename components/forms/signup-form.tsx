@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signupSchema, type SignupInput } from "@/lib/validations/auth";
 import { signupAction } from "@/app/auth/actions";
+import { applyServerFieldErrors } from "@/lib/form-errors";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,20 +29,22 @@ export function SignupForm({ categories }: { categories: Category[] }) {
   const [logo, setLogo] = React.useState<File | null>(null);
   const [tradeLicense, setTradeLicense] = React.useState<File | null>(null);
   const [productPhotos, setProductPhotos] = React.useState<File[]>([]);
-  const [logoError, setLogoError] = React.useState<string | null>(null);
+  const [fileErrors, setFileErrors] = React.useState<Record<string, string>>({});
 
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<SignupInput>({ resolver: zodResolver(signupSchema) });
 
   function onSubmit(values: SignupInput) {
     setServerError(null);
-    setLogoError(null);
+    setFileErrors({});
 
     if (!logo) {
-      setLogoError("Upload a business logo to continue.");
+      setFileErrors({ logo: "Upload a business logo to continue." });
+      document.getElementById("logo")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -62,6 +65,14 @@ export function SignupForm({ categories }: { categories: Category[] }) {
     startTransition(async () => {
       const result = await signupAction(formData);
       if (!result.ok) {
+        applyServerFieldErrors(setError, result.fieldErrors);
+        const fileFieldNames = ["logo", "tradeLicense", "productPhotos"] as const;
+        const nextFileErrors: Record<string, string> = {};
+        for (const name of fileFieldNames) {
+          const message = result.fieldErrors?.[name]?.[0];
+          if (message) nextFileErrors[name] = message;
+        }
+        setFileErrors(nextFileErrors);
         setServerError(result.error);
         return;
       }
@@ -142,7 +153,7 @@ export function SignupForm({ categories }: { categories: Category[] }) {
         </Field>
       </div>
 
-      <Field label="Business logo" htmlFor="logo" error={logoError ?? undefined} required>
+      <Field label="Business logo" htmlFor="logo" error={fileErrors.logo} required>
         <FileInput
           id="logo"
           accept="image/png,image/jpeg,image/webp"
@@ -151,7 +162,12 @@ export function SignupForm({ categories }: { categories: Category[] }) {
         />
       </Field>
 
-      <Field label="Trade licence" htmlFor="tradeLicense" hint="Optional — PNG, JPEG, WEBP, or PDF, up to 8MB">
+      <Field
+        label="Trade licence"
+        htmlFor="tradeLicense"
+        error={fileErrors.tradeLicense}
+        hint="Optional — PNG, JPEG, WEBP, or PDF, up to 8MB"
+      >
         <FileInput
           id="tradeLicense"
           accept="image/png,image/jpeg,image/webp,application/pdf"
@@ -159,7 +175,12 @@ export function SignupForm({ categories }: { categories: Category[] }) {
         />
       </Field>
 
-      <Field label="Product photos" htmlFor="productPhotos" hint="Optional — up to 6 photos, 5MB each">
+      <Field
+        label="Product photos"
+        htmlFor="productPhotos"
+        error={fileErrors.productPhotos}
+        hint="Optional — up to 6 photos, 5MB each"
+      >
         <FileInput
           id="productPhotos"
           accept="image/png,image/jpeg,image/webp"

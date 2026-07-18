@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { resetPasswordSchema } from "@/lib/validations/auth";
 import { resetPasswordAction } from "@/app/auth/actions";
+import { applyServerFieldErrors } from "@/lib/form-errors";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ export function ResetPasswordForm() {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<{ password: string; confirmPassword: string }>({ resolver: zodResolver(resetPasswordSchema) });
 
@@ -32,6 +34,7 @@ export function ResetPasswordForm() {
     startTransition(async () => {
       const result = await resetPasswordAction(formData);
       if (!result.ok) {
+        applyServerFieldErrors(setError, result.fieldErrors);
         setServerError(result.error);
         return;
       }

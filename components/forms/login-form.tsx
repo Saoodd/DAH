@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { loginAction } from "@/app/auth/actions";
+import { applyServerFieldErrors } from "@/lib/form-errors";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ export function LoginForm({ next }: { next?: string }) {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
 
@@ -32,6 +34,7 @@ export function LoginForm({ next }: { next?: string }) {
     startTransition(async () => {
       const result = await loginAction(formData);
       if (!result.ok) {
+        applyServerFieldErrors(setError, result.fieldErrors);
         setServerError(result.error);
         return;
       }

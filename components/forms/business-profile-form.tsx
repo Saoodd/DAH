@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { FileInput } from "@/components/ui/file-input";
 import { useToast } from "@/components/ui/toast";
+import { applyServerFieldErrors } from "@/lib/form-errors";
 
 interface Category {
   id: string;
@@ -44,6 +45,7 @@ export function BusinessProfileForm({
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<BusinessProfileInput>({ resolver: zodResolver(businessProfileSchema), defaultValues });
 
@@ -63,6 +65,7 @@ export function BusinessProfileForm({
     startTransition(async () => {
       const result = await updateBusinessProfileAction(formData);
       if (!result.ok) {
+        applyServerFieldErrors(setError, result.fieldErrors);
         toast({ title: "Couldn't save changes", description: result.error, variant: "error" });
         return;
       }
