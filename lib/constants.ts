@@ -118,6 +118,19 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   partially_refunded: "Partially Refunded",
 };
 
+export const PAYMENT_STATUS_COLORS: Record<string, string> = {
+  not_requested: "bg-neutral-100 text-neutral-700 border-neutral-300",
+  payment_required: "bg-amber-100 text-amber-800 border-amber-300",
+  pending_payment: "bg-blue-100 text-blue-800 border-blue-300",
+  receipt_uploaded: "bg-blue-100 text-blue-800 border-blue-300",
+  pending_verification: "bg-violet-100 text-violet-800 border-violet-300",
+  paid: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  failed: "bg-red-100 text-red-800 border-red-300",
+  expired: "bg-neutral-200 text-neutral-600 border-neutral-300",
+  refunded: "bg-orange-100 text-orange-800 border-orange-300",
+  partially_refunded: "bg-orange-100 text-orange-800 border-orange-300",
+};
+
 export const VAT_RATE = 0.05;
 
 export const UAE_PHONE_REGEX = /^(?:\+971|00971|971|0)?(?:2|3|4|6|7|9|50|51|52|54|55|56|58)\d{6,7}$/;

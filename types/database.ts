@@ -465,6 +465,7 @@ export interface Database {
         Returns: Database["public"]["Tables"]["booths"]["Row"];
       };
       release_expired_booth_locks: { Args: { p_event_id?: string | null }; Returns: number };
+      expire_overdue_payments: { Args: { p_event_id?: string | null }; Returns: number };
     };
     Enums: Record<string, never>;
   };

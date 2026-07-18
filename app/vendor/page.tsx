@@ -201,9 +201,14 @@ export default async function VendorDashboardPage() {
                       </p>
                     )}
                   </div>
-                  {["approved", "booth_selected", "awaiting_payment"].includes(currentApplication.status) && (
+                  {["approved", "booth_selected"].includes(currentApplication.status) && (
                     <Link href="/vendor/booths" className={buttonVariants({ variant: "primary" })}>
                       {currentApplication.status === "approved" ? "Select your booth" : "View your booth"}
+                    </Link>
+                  )}
+                  {["awaiting_payment", "payment_under_review", "confirmed"].includes(currentApplication.status) && (
+                    <Link href="/vendor/payment" className={buttonVariants({ variant: "primary" })}>
+                      {currentApplication.status === "confirmed" ? "View payment" : "Complete payment"}
                     </Link>
                   )}
                 </div>

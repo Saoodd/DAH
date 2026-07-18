@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/dal";
 import { DashboardShell, type NavItem } from "@/components/layout/dashboard-shell";
-import { HomeIcon, UsersIcon, CalendarIcon } from "@/components/icons";
+import { HomeIcon, UsersIcon, CalendarIcon, CreditCardIcon } from "@/components/icons";
 
 // Every admin page depends on the signed-in user's session and database
 // state — never prerender it statically.
@@ -10,6 +10,7 @@ const navItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: <HomeIcon /> },
   { href: "/admin/vendors", label: "Vendors", icon: <UsersIcon /> },
   { href: "/admin/events", label: "Events", icon: <CalendarIcon /> },
+  { href: "/admin/bank-details", label: "Bank Details", icon: <CreditCardIcon /> },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

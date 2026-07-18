@@ -120,7 +120,7 @@ export default async function EventApplicationsPage({
                         <td className="px-6 py-4 text-ink-600">{formatAED(a.total_amount)}</td>
                         <td className="px-6 py-4 text-ink-500">{formatDate(a.submitted_at ?? a.created_at)}</td>
                         <td className="px-6 py-4">
-                          <ApplicationActions applicationId={a.id} status={a.status} />
+                          <ApplicationActions applicationId={a.id} eventId={id} status={a.status} totalAmount={a.total_amount} />
                         </td>
                       </tr>
                     );
