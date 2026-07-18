@@ -13,16 +13,42 @@ interface FieldProps {
 }
 
 export function Field({ label, htmlFor, error, hint, required, children, className }: FieldProps) {
+  const errorId = `${htmlFor}-error`;
+  const hintId = `${htmlFor}-hint`;
+
+  const describedBy = error ? errorId : hint ? hintId : undefined;
+  const child =
+    React.isValidElement(children) && describedBy
+      ? React.cloneElement(children as React.ReactElement<{ "aria-describedby"?: string }>, {
+          "aria-describedby": describedBy,
+        })
+      : children;
+
   return (
     <div className={cn("w-full", className)}>
       <Label htmlFor={htmlFor}>
         {label}
-        {required && <span className="ml-0.5 text-brand-600">*</span>}
+        {required && (
+          <span className="ml-0.5 text-brand-600" aria-hidden="true">
+            *
+          </span>
+        )}
       </Label>
-      {children}
-      {hint && !error && <p className="mt-1.5 text-xs text-ink-400">{hint}</p>}
+      {child}
+      {hint && !error && (
+        <p id={hintId} className="mt-1.5 text-xs text-ink-400">
+          {hint}
+        </p>
+      )}
       {error && (
-        <p className="mt-1.5 text-xs font-medium text-red-600" role="alert">
+        <p id={errorId} className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600" role="alert">
+          <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path
+              fillRule="evenodd"
+              d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 8a1 1 0 100-2 1 1 0 000 2z"
+              clipRule="evenodd"
+            />
+          </svg>
           {error}
         </p>
       )}

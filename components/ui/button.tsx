@@ -6,13 +6,15 @@ type Size = "sm" | "md" | "lg";
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "bg-ink-900 text-white hover:bg-ink-800 focus-visible:outline-ink-900 disabled:bg-ink-300",
+    "bg-ink-900 text-white shadow-sm hover:bg-ink-800 hover:shadow-md active:bg-ink-950 focus-visible:outline-ink-900 disabled:bg-ink-200 disabled:text-ink-400 disabled:shadow-none",
   secondary:
-    "bg-brand-500 text-white hover:bg-brand-600 focus-visible:outline-brand-500 disabled:bg-brand-200",
+    "bg-brand-500 text-white shadow-[var(--shadow-brand)] hover:bg-brand-600 active:bg-brand-700 focus-visible:outline-brand-500 disabled:bg-brand-100 disabled:text-brand-300 disabled:shadow-none",
   outline:
-    "border border-ink-200 bg-white text-ink-900 hover:bg-ink-50 focus-visible:outline-ink-900 disabled:text-ink-300",
-  ghost: "text-ink-700 hover:bg-ink-100 focus-visible:outline-ink-900",
-  danger: "bg-red-600 text-white hover:bg-red-700 focus-visible:outline-red-600 disabled:bg-red-200",
+    "border border-ink-200 bg-white text-ink-900 shadow-xs hover:border-ink-300 hover:bg-ink-50 active:bg-ink-100 focus-visible:outline-ink-900 disabled:border-ink-100 disabled:text-ink-300 disabled:shadow-none",
+  ghost:
+    "text-ink-600 hover:bg-ink-100 hover:text-ink-900 active:bg-ink-200 focus-visible:outline-ink-900 disabled:text-ink-300",
+  danger:
+    "bg-red-600 text-white shadow-sm hover:bg-red-700 active:bg-red-800 focus-visible:outline-red-600 disabled:bg-red-200 disabled:shadow-none",
 };
 
 const sizeClasses: Record<Size, string> = {
@@ -31,7 +33,10 @@ export function buttonVariants({
   className?: string;
 } = {}) {
   return cn(
-    "inline-flex items-center justify-center font-medium transition-colors duration-150 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
+    "inline-flex select-none items-center justify-center whitespace-nowrap font-medium transition-all duration-150 ease-out",
+    "active:scale-[0.98]",
+    "disabled:cursor-not-allowed disabled:active:scale-100",
+    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
     variantClasses[variant],
     sizeClasses[size],
     className
@@ -50,6 +55,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || loading}
+        aria-busy={loading || undefined}
         className={buttonVariants({ variant, size, className })}
         {...props}
       >
