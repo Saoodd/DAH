@@ -27,14 +27,20 @@ This is being built in phases. See the commit history for what's shipped.
   booth, booth changes, and a rule-based (no AI) recommendation engine.
   Full admin booth map builder (drag/resize/duplicate/delete, zones, map
   features, hold/reserve/confirm/release/swap).
-- **Phase 4 (next): Payments (ADCB Pace Pay + IBAN), expiry**
-- **Phase 5: Waiting list, notifications, export centre, setup check-in**
+- **Phase 4: Payments (ADCB Pace Pay + IBAN), expiry** — confirming a
+  booth opens a payment record with a configurable deadline (default 1
+  hour); ADCB Pace Pay (admin-attached link, vendor-entered reference,
+  never auto-marked paid) and IBAN transfer (bank details, receipt
+  upload, admin verification); self-healing expiry that releases the
+  booth and preserves the application; admin confirm/reject/extend/
+  reopen/refund/offline-payment controls.
+- **Phase 5 (next): Waiting list, notifications, export centre, setup check-in**
 - **Phase 6: Audit log UI, analytics, testing, security review**
 
 The database schema for the entire platform (all phases) is created in
-`supabase/migrations/0001_init.sql`–`0004_realtime.sql` up front, so
-later phases add application code rather than risky incremental schema
-changes.
+`supabase/migrations/0001_init.sql`–`0006_confirm_booth_creates_payment.sql`
+up front, so later phases add application code rather than risky
+incremental schema changes.
 
 ## Why the homepage previously 404'd
 
