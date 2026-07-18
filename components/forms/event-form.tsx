@@ -143,7 +143,12 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
           <Input id="name" {...register("name")} aria-invalid={!!errors.name} />
         </Field>
         <Field label="Location" htmlFor="location" error={errors.location?.message}>
-          <Input id="location" placeholder="e.g. Dubai Design District" {...register("location")} />
+          <Input
+            id="location"
+            placeholder="e.g. Dubai Design District"
+            {...register("location")}
+            aria-invalid={!!errors.location}
+          />
         </Field>
       </div>
 
@@ -175,15 +180,20 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
       </div>
 
       <Field label="Description" htmlFor="description" error={errors.description?.message}>
-        <Textarea id="description" rows={3} {...register("description")} />
+        <Textarea id="description" rows={3} {...register("description")} aria-invalid={!!errors.description} />
       </Field>
 
       <Field label="Vendor rules" htmlFor="vendorRules" error={errors.vendorRules?.message}>
-        <Textarea id="vendorRules" rows={3} {...register("vendorRules")} />
+        <Textarea id="vendorRules" rows={3} {...register("vendorRules")} aria-invalid={!!errors.vendorRules} />
       </Field>
 
       <Field label="Setup instructions" htmlFor="setupInstructions" error={errors.setupInstructions?.message}>
-        <Textarea id="setupInstructions" rows={3} {...register("setupInstructions")} />
+        <Textarea
+          id="setupInstructions"
+          rows={3}
+          {...register("setupInstructions")}
+          aria-invalid={!!errors.setupInstructions}
+        />
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -199,6 +209,7 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
             type="number"
             min={5}
             {...register("paymentDeadlineMinutes", { valueAsNumber: true })}
+            aria-invalid={!!errors.paymentDeadlineMinutes}
           />
         </Field>
         <Field
@@ -213,6 +224,7 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
             type="number"
             min={1}
             {...register("boothLockMinutes", { valueAsNumber: true })}
+            aria-invalid={!!errors.boothLockMinutes}
           />
         </Field>
       </div>

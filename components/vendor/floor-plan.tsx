@@ -320,8 +320,23 @@ export function FloorPlan({
             {booths.map((b) => {
               const mine = isMine(b);
               const displayStatus = mine && (b.status === "locked" || b.status === "awaiting_payment") ? b.status : b.status;
+              const label = `Booth ${b.booth_number}, ${mine ? "your selection" : BOOTH_STATUS_LABELS[displayStatus] ?? displayStatus}${b.recommended ? ", recommended" : ""}`;
               return (
-                <g key={b.id} data-booth onClick={() => setSelectedBoothId(b.id)} className="cursor-pointer">
+                <g
+                  key={b.id}
+                  data-booth
+                  onClick={() => setSelectedBoothId(b.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedBoothId(b.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={label}
+                  className="cursor-pointer outline-none focus-visible:opacity-80"
+                >
                   <rect
                     x={b.map_x}
                     y={b.map_y}
@@ -332,7 +347,7 @@ export function FloorPlan({
                     stroke={b.recommended ? "#b8873c" : "#ffffff"}
                     strokeWidth={b.recommended ? 1 : 0.4}
                   />
-                  <text x={b.map_x + b.map_width / 2} y={b.map_y + b.map_height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={2.4} className="pointer-events-none select-none fill-white font-medium">
+                  <text x={b.map_x + b.map_width / 2} y={b.map_y + b.map_height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={2.4} className="pointer-events-none select-none fill-white font-medium" aria-hidden="true">
                     {b.booth_number}
                   </text>
                 </g>
@@ -379,13 +394,29 @@ function BoothDetailModal({
 }) {
   const vat = Math.round(booth.price_before_vat * 0.05 * 100) / 100;
   const canInteract = applicationStatus === "approved" || applicationStatus === "booth_selected";
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const titleId = React.useId();
+
+  React.useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-ink-950/50" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-t-2xl bg-white p-6 shadow-2xl sm:rounded-2xl">
+    <div className="fixed inset-0 z-30 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div className="absolute inset-0 bg-ink-950/50" onClick={onClose} aria-hidden="true" />
+      <div ref={panelRef} tabIndex={-1} className="relative w-full max-w-md rounded-t-2xl bg-white p-6 shadow-2xl outline-none sm:rounded-2xl animate-[var(--animate-scale-in)]">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-ink-950">Booth {booth.booth_number}</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-ink-950">Booth {booth.booth_number}</h2>
           <Badge className={BOOTH_STATUS_BADGE_COLORS[mine ? "confirmed" : booth.status]}>
             {mine ? "Your selection" : BOOTH_STATUS_LABELS[booth.status]}
           </Badge>

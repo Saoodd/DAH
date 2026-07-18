@@ -23,9 +23,27 @@ interface DashboardShellProps {
 export function DashboardShell({ navItems, roleLabel, identityLabel, children }: DashboardShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const drawerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!mobileOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    drawerRef.current?.querySelector<HTMLElement>("button, a")?.focus();
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+      previouslyFocused?.focus();
+    };
+  }, [mobileOpen]);
 
   const NavLinks = (
-    <nav className="flex flex-1 flex-col gap-1 px-3">
+    <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-3">
       {navItems.map((item) => {
         const active = pathname === item.href || (item.href !== "/vendor" && item.href !== "/admin" && pathname.startsWith(item.href));
         return (
@@ -33,6 +51,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
             key={item.href}
             href={item.href}
             onClick={() => setMobileOpen(false)}
+            aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
               active ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-100"
@@ -97,8 +116,14 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
 
         {mobileOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
-            <div className="absolute inset-0 bg-ink-950/40" onClick={() => setMobileOpen(false)} />
-            <div className="absolute inset-y-0 right-0 flex w-72 flex-col bg-background shadow-xl">
+            <div className="absolute inset-0 bg-ink-950/40" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+            <div
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
+              className="absolute inset-y-0 right-0 flex w-72 flex-col bg-background shadow-xl animate-[var(--animate-slide-up)]"
+            >
               <div className="flex h-16 items-center justify-between border-b border-ink-100 px-4">
                 <span className="text-sm font-semibold text-ink-900">Menu</span>
                 <button

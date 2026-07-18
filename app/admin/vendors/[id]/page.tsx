@@ -70,7 +70,7 @@ export default async function AdminVendorDetailPage({ params }: { params: Promis
           {business.logo_url ? (
             <Image
               src={business.logo_url}
-              alt=""
+              alt={`${business.business_name} logo`}
               width={80}
               height={80}
               className="h-20 w-20 shrink-0 rounded-xl object-cover ring-1 ring-ink-100"
@@ -123,8 +123,15 @@ export default async function AdminVendorDetailPage({ params }: { params: Promis
             <CardTitle>Product photos</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
-            {business.product_photo_urls.map((url) => (
-              <Image key={url} src={url} alt="" width={96} height={96} className="h-24 w-24 rounded-lg object-cover ring-1 ring-ink-100" />
+            {business.product_photo_urls.map((url, i) => (
+              <Image
+                key={url}
+                src={url}
+                alt={`${business.business_name} product photo ${i + 1}`}
+                width={96}
+                height={96}
+                className="h-24 w-24 rounded-lg object-cover ring-1 ring-ink-100"
+              />
             ))}
           </CardContent>
         </Card>

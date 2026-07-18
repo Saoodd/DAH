@@ -118,7 +118,12 @@ export function SignupForm({ categories }: { categories: Category[] }) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Business Instagram username" htmlFor="instagramUsername" error={errors.instagramUsername?.message}>
-          <Input id="instagramUsername" placeholder="@yourbusiness" {...register("instagramUsername")} />
+          <Input
+            id="instagramUsername"
+            placeholder="@yourbusiness"
+            {...register("instagramUsername")}
+            aria-invalid={!!errors.instagramUsername}
+          />
         </Field>
         <Field label="Business category" htmlFor="categoryId" error={errors.categoryId?.message} required>
           <Select id="categoryId" defaultValue="" {...register("categoryId")} aria-invalid={!!errors.categoryId}>
