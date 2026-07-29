@@ -86,8 +86,14 @@ export function BusinessProfileForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Email address" htmlFor="email" error={errors.email?.message} required>
-          <Input id="email" type="email" {...register("email")} aria-invalid={!!errors.email} />
+        <Field
+          label="Email address"
+          htmlFor="email"
+          error={errors.email?.message}
+          hint="Contact support to change this verified account email."
+          required
+        >
+          <Input id="email" type="email" readOnly {...register("email")} aria-invalid={!!errors.email} />
         </Field>
         <Field label="UAE phone number" htmlFor="phone" error={errors.phone?.message} required>
           <Input id="phone" type="tel" {...register("phone")} aria-invalid={!!errors.phone} />

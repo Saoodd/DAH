@@ -34,12 +34,14 @@ export async function requireUser() {
 
 export async function requireVendor() {
   const session = await requireUser();
+  if (!session.profile) redirect("/account-error");
   if (session.profile?.role !== "vendor") redirect("/admin");
   return session;
 }
 
 export async function requireAdmin() {
   const session = await requireUser();
+  if (!session.profile) redirect("/account-error");
   if (session.profile?.role !== "admin") redirect("/vendor");
   return session;
 }

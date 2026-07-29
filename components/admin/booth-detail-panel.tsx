@@ -81,16 +81,20 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
     runAction(adminHoldBoothAction(booth.id, eventId, businessId), "Booth held for vendor.");
   }
 
-  async function handleAssign(businessId: string, status: "reserved" | "confirmed") {
+  async function handleAssign(businessId: string) {
     const applicationId = await findApplicationForBusinessAction(eventId, businessId);
     if (!applicationId) {
       toast({ title: "This vendor hasn't applied to this event yet", variant: "error" });
       return;
     }
-    runAction(adminAssignBoothAction(booth.id, eventId, applicationId, status), `Booth ${status}.`);
+    runAction(adminAssignBoothAction(booth.id, eventId, applicationId), "Booth reserved.");
   }
 
   const vat = Math.round(booth.price_before_vat * 0.05 * 100) / 100;
+  const safelyUnassigned =
+    !booth.current_application_id && ["available", "blocked", "unavailable"].includes(booth.status);
+  const canOfferToVendor =
+    !booth.current_application_id && ["available", "admin_held"].includes(booth.status);
 
   return (
     <div className="sticky top-6 rounded-2xl border border-ink-100 bg-white shadow-sm">
@@ -103,7 +107,7 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
           <Button size="sm" variant="outline" onClick={onDuplicate}>
             Duplicate
           </Button>
-          <Button size="sm" variant="danger" onClick={onDelete}>
+          <Button size="sm" variant="danger" onClick={onDelete} disabled={!safelyUnassigned} title={!safelyUnassigned ? "Release this booth before deleting it" : undefined}>
             Delete
           </Button>
         </div>
@@ -112,6 +116,7 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
       <div className="flex border-b border-ink-100 text-xs font-medium">
         {(["details", "status", "history"] as const).map((t) => (
           <button
+            type="button"
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 px-3 py-2 capitalize ${tab === t ? "border-b-2 border-ink-900 text-ink-900" : "text-ink-400"}`}
@@ -132,10 +137,10 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
             }}
           >
             <Field label="Booth number" htmlFor="boothNumber" required>
-              <Input id="boothNumber" name="boothNumber" defaultValue={booth.booth_number} required />
+              <Input id="boothNumber" name="boothNumber" defaultValue={booth.booth_number} maxLength={30} required />
             </Field>
             <Field label="Size label" htmlFor="sizeLabel">
-              <Input id="sizeLabel" name="sizeLabel" defaultValue={booth.size_label ?? ""} placeholder="e.g. 3x3m" />
+              <Input id="sizeLabel" name="sizeLabel" defaultValue={booth.size_label ?? ""} maxLength={50} placeholder="e.g. 3x3m" />
             </Field>
             <Field label="Price before VAT (AED)" htmlFor="priceBeforeVat" required>
               <Input
@@ -144,6 +149,7 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
                 type="number"
                 min={0}
                 step="0.01"
+                max={99999999.99}
                 defaultValue={booth.price_before_vat}
               />
             </Field>
@@ -167,6 +173,7 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
                 type="number"
                 min={0}
                 defaultValue={booth.distance_from_entrance ?? ""}
+                max={10000}
               />
             </Field>
             <fieldset>
@@ -198,7 +205,7 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
               </div>
             </fieldset>
             <Field label="Internal admin notes" htmlFor="adminNotes">
-              <Textarea id="adminNotes" name="adminNotes" rows={2} defaultValue={booth.admin_notes ?? ""} />
+              <Textarea id="adminNotes" name="adminNotes" rows={2} maxLength={2000} defaultValue={booth.admin_notes ?? ""} />
             </Field>
             <Button type="submit" size="sm" loading={isPending}>
               Save
@@ -208,7 +215,8 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
 
         {tab === "status" && (
           <div className="space-y-5">
-            <div className="flex flex-wrap gap-2">
+            {safelyUnassigned ? (
+              <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => runAction(setBoothStatusAction(booth.id, eventId, "available"), "Marked available.")}>
                 Available
               </Button>
@@ -218,10 +226,17 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
               <Button size="sm" variant="outline" onClick={() => runAction(setBoothStatusAction(booth.id, eventId, "unavailable"), "Marked unavailable.")}>
                 Unavailable
               </Button>
-              <Button size="sm" variant="danger" onClick={() => runAction(adminReleaseBoothAction(booth.id, eventId), "Booth released.")}>
+              </div>
+            ) : (
+              <div>
+                <p className="mb-2 text-sm text-ink-600">
+                  Release this hold or assignment before changing the booth&rsquo;s availability.
+                </p>
+                <Button size="sm" variant="danger" onClick={() => runAction(adminReleaseBoothAction(booth.id, eventId), "Booth released.")}>
                 Release
-              </Button>
-            </div>
+                </Button>
+              </div>
+            )}
 
             {booth.status === "locked" && (
               <div className="flex items-end gap-2">
@@ -230,6 +245,8 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
                     id="extendMinutes"
                     type="number"
                     min={1}
+                    max={120}
+                    step={1}
                     value={extendMinutes}
                     onChange={(e) => setExtendMinutes(Number(e.target.value))}
                   />
@@ -240,7 +257,8 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
               </div>
             )}
 
-            <div>
+            {canOfferToVendor && (
+              <div>
               <p className="mb-1.5 text-sm font-medium text-ink-800">Hold or assign for a vendor</p>
               <Input placeholder="Search vendor by business name…" value={vendorQuery} onChange={(e) => handleVendorSearch(e.target.value)} />
               {vendorResults.length > 0 && (
@@ -249,14 +267,13 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
                     <li key={v.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                       <span className="truncate">{v.business_name}</span>
                       <span className="flex shrink-0 gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => handleHold(v.id)}>
-                          Hold
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleAssign(v.id, "reserved")}>
+                        {booth.status === "available" && (
+                          <Button size="sm" variant="ghost" onClick={() => handleHold(v.id)}>
+                            Hold
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => handleAssign(v.id)}>
                           Reserve
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleAssign(v.id, "confirmed")}>
-                          Confirm
                         </Button>
                       </span>
                     </li>
@@ -264,6 +281,7 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
                 </ul>
               )}
             </div>
+            )}
           </div>
         )}
 
@@ -287,8 +305,8 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
                 ))}
               </ul>
             )}
-          </div>
-        )}
+              </div>
+            )}
       </div>
     </div>
   );

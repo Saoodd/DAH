@@ -198,7 +198,7 @@ export function SignupForm({ categories }: { categories: Category[] }) {
         Create account
       </Button>
       <p className="text-center text-xs text-ink-400">
-        By continuing you agree to Dar Al Hay Events&rsquo; vendor terms.
+        By continuing, you confirm the information is accurate and agree to receive event-related messages.
       </p>
     </form>
   );

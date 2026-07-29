@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SignupForm } from "@/components/forms/signup-form";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -16,9 +16,9 @@ export default async function SignupPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Sign-up is not configured yet</CardTitle>
+          <h1 className="text-xl font-semibold tracking-tight text-ink-900">Sign-up is temporarily unavailable</h1>
           <CardDescription>
-            Supabase environment variables are missing. See the README for setup instructions.
+            We can&rsquo;t accept new applications right now. Please try again later.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -26,23 +26,25 @@ export default async function SignupPage() {
   }
 
   const supabase = await createClient();
-  const { data: categories } = await supabase.from("categories").select("id, name").order("sort_order");
+  const { data: categories, error: categoriesError } = await supabase.from("categories").select("id, name").order("sort_order");
+  const signupAvailable = !categoriesError && Boolean(categories?.length);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create your business account</CardTitle>
+        <h1 className="text-xl font-semibold tracking-tight text-ink-900">Create your business account</h1>
         <CardDescription>
           One account per business — you&rsquo;ll reuse it for every future Dar Al Hay event.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!categories?.length && (
+        {!signupAvailable ? (
           <Alert variant="warning">
-            No business categories found. Run the seed script (see README) before accepting sign-ups.
+            Applications are temporarily paused while registration options are being prepared. Please try again later.
           </Alert>
+        ) : (
+          <SignupForm categories={categories ?? []} />
         )}
-        <SignupForm categories={categories ?? []} />
         <p className="text-center text-sm text-ink-500">
           Already have an account?{" "}
           <Link href="/login" className="font-medium text-brand-600 hover:text-brand-700">

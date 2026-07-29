@@ -16,6 +16,54 @@ function fail(error: string): ActionResult {
   return { ok: false, error };
 }
 
+function validMapNumber(value: number, minimum: number, maximum: number): boolean {
+  return Number.isFinite(value) && value >= minimum && value <= maximum;
+}
+
+function validMapPosition(position: {
+  mapX: number;
+  mapY: number;
+  mapWidth?: number;
+  mapHeight?: number;
+  rotation?: number;
+}): boolean {
+  return (
+    validMapNumber(position.mapX, 0, 100) &&
+    validMapNumber(position.mapY, 0, 100) &&
+    (position.mapWidth === undefined || validMapNumber(position.mapWidth, 0.5, 100)) &&
+    (position.mapHeight === undefined || validMapNumber(position.mapHeight, 0.5, 100)) &&
+    (position.rotation === undefined || validMapNumber(position.rotation, -360, 360))
+  );
+}
+
+function boothMutationError(error: { message: string } | null, fallback: string): ActionResult {
+  const message = error?.message ?? "";
+  if (message.includes("BOOTH_NOT_FOUND")) return fail("Booth not found in this event.");
+  if (message.includes("APPLICATION_NOT_FOUND")) return fail("Application not found.");
+  if (message.includes("BOOTH_EVENT_MISMATCH")) {
+    return fail("The booth and application no longer belong to the selected event. Refresh and try again.");
+  }
+  if (message.includes("BUSINESS_NOT_APPROVED") || message.includes("BUSINESS_REAPPROVAL_REQUIRED")) {
+    return fail("This vendor is not currently eligible for booth assignment.");
+  }
+  if (message.includes("APPLICATION_NOT_ELIGIBLE") || message.includes("ACTIVE_BOOTH_EXISTS")) {
+    return fail("Release the application's current booth before assigning another one.");
+  }
+  if (message.includes("BOOTH_UNAVAILABLE")) {
+    return fail("This booth is no longer available for that vendor. Refresh and try again.");
+  }
+  if (message.includes("BOOTH_PAYMENT_CONFLICT")) {
+    return fail("This booth has a paid or partially refunded payment. Complete the refund before releasing it.");
+  }
+  if (message.includes("BOOTH_STATE_CONFLICT") || message.includes("BOOTH_ASSIGNMENT_INVALID")) {
+    return fail("The booth assignment changed or is inconsistent. Refresh before trying again.");
+  }
+  if (message.includes("BOOTH_NOT_RELEASABLE")) return fail("This booth has no active hold or assignment to release.");
+  if (message.includes("INVALID_RELEASE_REASON")) return fail("Keep the release reason under 2,000 characters.");
+  if (message.includes("EVENT_NOT_ACTIVE")) return fail("This event has ended or is archived.");
+  return fail(fallback);
+}
+
 async function nextBoothNumber(supabase: Awaited<ReturnType<typeof createClient>>, eventId: string) {
   const { count } = await supabase
     .from("booths")
@@ -61,6 +109,7 @@ export async function updateBoothPositionAction(
   eventId: string,
   position: { mapX: number; mapY: number; mapWidth?: number; mapHeight?: number; rotation?: number }
 ): Promise<ActionResult> {
+  if (!validMapPosition(position)) return fail("Booth position or size is outside the map bounds.");
   await requireAdmin();
   const supabase = await createClient();
 
@@ -69,8 +118,15 @@ export async function updateBoothPositionAction(
   if (position.mapHeight !== undefined) updates.map_height = position.mapHeight;
   if (position.rotation !== undefined) updates.rotation = position.rotation;
 
-  const { error } = await supabase.from("booths").update(updates).eq("id", boothId);
+  const { data: updated, error } = await supabase
+    .from("booths")
+    .update(updates)
+    .eq("id", boothId)
+    .eq("event_id", eventId)
+    .select("id")
+    .maybeSingle();
   if (error) return fail("Could not move the booth.");
+  if (!updated) return fail("Booth not found in this event.");
 
   revalidatePath(`/admin/events/${eventId}/booths`);
   return { ok: true };
@@ -97,8 +153,9 @@ export async function updateBoothDetailsAction(
   const data = parsed.data;
 
   const supabase = await createClient();
-  const { data: existing } = await supabase.from("booths").select("*").eq("id", boothId).maybeSingle();
-  if (!existing) return fail("Booth not found.");
+  const { data: existing, error: existingError } = await supabase.from("booths").select("*").eq("id", boothId).maybeSingle();
+  if (existingError) return fail("Could not load the booth.");
+  if (!existing || existing.event_id !== eventId) return fail("Booth not found in this event.");
 
   const updates: BoothUpdate = {
     booth_number: data.boothNumber,
@@ -111,7 +168,7 @@ export async function updateBoothDetailsAction(
     admin_notes: data.adminNotes || null,
   };
 
-  const { error } = await supabase.from("booths").update(updates).eq("id", boothId);
+  const { error } = await supabase.from("booths").update(updates).eq("id", boothId).eq("event_id", eventId);
   if (error) {
     if (error.code === "23505") return fail("That booth number is already used in this event.");
     return fail("Could not save the booth.");
@@ -142,8 +199,9 @@ export async function duplicateBoothAction(boothId: string, eventId: string): Pr
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: source } = await supabase.from("booths").select("*").eq("id", boothId).maybeSingle();
-  if (!source) return fail("Booth not found.");
+  const { data: source, error: sourceError } = await supabase.from("booths").select("*").eq("id", boothId).maybeSingle();
+  if (sourceError) return fail("Could not load the booth.");
+  if (!source || source.event_id !== eventId) return fail("Booth not found in this event.");
 
   const boothNumber = await nextBoothNumber(supabase, eventId);
   const insert: BoothInsert = {
@@ -181,7 +239,26 @@ export async function deleteBoothAction(boothId: string, eventId: string): Promi
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { error } = await supabase.from("booths").delete().eq("id", boothId);
+  const { data: booth, error: fetchError } = await supabase
+    .from("booths")
+    .select("event_id, status, current_application_id")
+    .eq("id", boothId)
+    .maybeSingle();
+  if (fetchError) return fail("Could not load this booth.");
+  if (!booth || booth.event_id !== eventId) return fail("Booth not found in this event.");
+  if (
+    booth.current_application_id ||
+    !["available", "blocked", "unavailable"].includes(booth.status)
+  ) {
+    return fail("Release this booth and its linked application before deleting it.");
+  }
+
+  const { error } = await supabase
+    .from("booths")
+    .delete()
+    .eq("id", boothId)
+    .eq("event_id", eventId)
+    .is("current_application_id", null);
   if (error) return fail("Could not delete this booth — it may already have an application linked to it.");
 
   await logAudit(supabase, {
@@ -209,10 +286,21 @@ export async function setBoothStatusAction(
   }
   const supabase = await createClient();
 
-  const { data: existing } = await supabase.from("booths").select("status").eq("id", boothId).maybeSingle();
-  if (!existing) return fail("Booth not found.");
+  const { data: existing, error: fetchError } = await supabase
+    .from("booths")
+    .select("event_id, status, current_application_id")
+    .eq("id", boothId)
+    .maybeSingle();
+  if (fetchError) return fail("Could not load this booth.");
+  if (!existing || existing.event_id !== eventId) return fail("Booth not found in this event.");
+  if (
+    existing.current_application_id ||
+    !ADMIN_SETTABLE_STATUSES.includes(existing.status)
+  ) {
+    return fail("Release the booth's current hold or assignment before changing its status.");
+  }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("booths")
     .update({
       status,
@@ -221,8 +309,14 @@ export async function setBoothStatusAction(
       lock_expires_at: null,
       current_application_id: null,
     })
-    .eq("id", boothId);
+    .eq("id", boothId)
+    .eq("event_id", eventId)
+    .eq("status", existing.status)
+    .is("current_application_id", null)
+    .select("id")
+    .maybeSingle();
   if (error) return fail("Could not update booth status.");
+  if (!updated) return fail("The booth changed. Refresh the map and try again.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -245,11 +339,44 @@ export async function adminHoldBoothAction(boothId: string, eventId: string, bus
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { error } = await supabase
+  const [{ data: booth, error: boothFetchError }, { data: business, error: businessError }] =
+    await Promise.all([
+      supabase
+        .from("booths")
+        .select("event_id, status, current_application_id")
+        .eq("id", boothId)
+        .maybeSingle(),
+      supabase
+        .from("businesses")
+        .select("approval_status, requires_reapproval")
+        .eq("id", businessId)
+        .maybeSingle(),
+    ]);
+  if (boothFetchError || businessError) return fail("Could not validate this hold.");
+  if (!booth || booth.event_id !== eventId) return fail("Booth not found in this event.");
+  if (booth.status !== "available" || booth.current_application_id) {
+    return fail("Only an available, unassigned booth can be placed on hold.");
+  }
+  if (!business || business.approval_status !== "approved" || business.requires_reapproval) {
+    return fail("Only an approved vendor with no pending re-review can receive a hold.");
+  }
+
+  const { data: updated, error } = await supabase
     .from("booths")
-    .update({ status: "admin_held", held_for_business_id: businessId })
-    .eq("id", boothId);
+    .update({
+      status: "admin_held",
+      held_for_business_id: businessId,
+      locked_by_business_id: null,
+      lock_expires_at: null,
+    })
+    .eq("id", boothId)
+    .eq("event_id", eventId)
+    .eq("status", "available")
+    .is("current_application_id", null)
+    .select("id")
+    .maybeSingle();
   if (error) return fail("Could not hold this booth.");
+  if (!updated) return fail("The booth was assigned while you were working. Refresh and try again.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -268,43 +395,26 @@ export async function adminHoldBoothAction(boothId: string, eventId: string, bus
 }
 
 export async function adminReleaseBoothAction(boothId: string, eventId: string, reason?: string): Promise<ActionResult> {
+  const normalizedReason = reason?.trim() || null;
+  if (normalizedReason && normalizedReason.length > 2000) {
+    return fail("Keep the release reason under 2,000 characters.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: existing } = await supabase
-    .from("booths")
-    .select("status, booth_number, current_application_id")
-    .eq("id", boothId)
-    .maybeSingle();
-  if (!existing) return fail("Booth not found.");
+  const { data: result, error } = await supabase.rpc("admin_release_booth", {
+    p_booth_id: boothId,
+    p_event_id: eventId,
+    p_reason: normalizedReason,
+  });
+  if (error || !result) return boothMutationError(error, "Could not release this booth.");
 
-  const { error } = await supabase
-    .from("booths")
-    .update({
-      status: "available",
-      held_for_business_id: null,
-      locked_by_business_id: null,
-      lock_expires_at: null,
-      current_application_id: null,
-    })
-    .eq("id", boothId);
-  if (error) return fail("Could not release this booth.");
-
-  if (existing.current_application_id) {
-    const { data: releasedApplication } = await supabase
-      .from("applications")
-      .update({ booth_id: null, booth_price_before_vat: null, vat_amount: null, total_amount: null, status: "approved" })
-      .eq("id", existing.current_application_id)
-      .select("business_id")
-      .single();
-
-    if (releasedApplication) {
-      await sendNotification(supabase, {
-        businessId: releasedApplication.business_id,
-        templateKey: "booth_released",
-        variables: { booth_number: existing.booth_number },
-      });
-    }
+  if (result.application_id && result.business_id) {
+    await sendNotification(supabase, {
+      businessId: result.business_id,
+      templateKey: "booth_released",
+      variables: { booth_number: result.booth_number },
+    });
   }
 
   await logAudit(supabase, {
@@ -313,66 +423,43 @@ export async function adminReleaseBoothAction(boothId: string, eventId: string, 
     action: "booth.admin_released",
     entityType: "booth",
     entityId: boothId,
-    previousValue: { status: existing.status },
-    newValue: { status: "available", reason: reason ?? null },
+    previousValue: { status: result.previous_status, application_status: result.previous_application_status ?? null },
+    newValue: { status: result.status, application_status: result.application_status, reason: normalizedReason },
+    metadata: { application_id: result.application_id, payment_id: result.payment_id, payment_status: result.payment_status },
   });
-  await supabase
-    .from("booth_events")
-    .insert({ booth_id: boothId, event_type: "admin_released", actor_id: authUser.id, details: { reason: reason ?? null } });
 
   revalidatePath(`/admin/events/${eventId}/booths`);
+  revalidatePath(`/admin/events/${eventId}/applications`);
+  revalidatePath(`/admin/events/${eventId}/payments`);
   return { ok: true };
 }
 
 export async function adminAssignBoothAction(
   boothId: string,
   eventId: string,
-  applicationId: string,
-  status: "reserved" | "confirmed"
+  applicationId: string
 ): Promise<ActionResult> {
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: application } = await supabase
-    .from("applications")
-    .select("id, business_id")
-    .eq("id", applicationId)
-    .maybeSingle();
-  if (!application) return fail("Application not found.");
-
-  const { data: booth } = await supabase.from("booths").select("price_before_vat").eq("id", boothId).maybeSingle();
-  if (!booth) return fail("Booth not found.");
-
-  const vat = Math.round(booth.price_before_vat * 0.05 * 100) / 100;
-
-  const { error: boothError } = await supabase
-    .from("booths")
-    .update({ status, current_application_id: applicationId, locked_by_business_id: application.business_id, lock_expires_at: null })
-    .eq("id", boothId);
-  if (boothError) return fail("Could not assign this booth.");
-
-  await supabase
-    .from("applications")
-    .update({
-      booth_id: boothId,
-      booth_price_before_vat: booth.price_before_vat,
-      vat_amount: vat,
-      total_amount: booth.price_before_vat + vat,
-      status: status === "confirmed" ? "confirmed" : "booth_selected",
-    })
-    .eq("id", applicationId);
-
-  await logAudit(supabase, {
-    actorId: authUser.id,
-    actorRole: "admin",
-    action: `booth.${status}`,
-    entityType: "booth",
-    entityId: boothId,
-    newValue: { application_id: applicationId, status },
+  const { data: result, error } = await supabase.rpc("admin_assign_booth", {
+    p_booth_id: boothId,
+    p_event_id: eventId,
+    p_application_id: applicationId,
   });
-  await supabase
-    .from("booth_events")
-    .insert({ booth_id: boothId, event_type: status, business_id: application.business_id, actor_id: authUser.id });
+  if (error || !result) return boothMutationError(error, "Could not assign this booth.");
+
+  if (result.changed) {
+    await logAudit(supabase, {
+      actorId: authUser.id,
+      actorRole: "admin",
+      action: "booth.reserved",
+      entityType: "booth",
+      entityId: boothId,
+      previousValue: { status: result.previous_status },
+      newValue: { application_id: result.application_id, status: result.status, application_status: result.application_status },
+    });
+  }
 
   revalidatePath(`/admin/events/${eventId}/booths`);
   revalidatePath(`/admin/events/${eventId}/applications`);
@@ -380,16 +467,24 @@ export async function adminAssignBoothAction(
 }
 
 export async function adminExtendLockAction(boothId: string, eventId: string, extraMinutes: number): Promise<ActionResult> {
+  if (!Number.isInteger(extraMinutes) || extraMinutes < 1 || extraMinutes > 120) {
+    return fail("Enter a whole number of minutes between 1 and 120.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: booth } = await supabase.from("booths").select("status, lock_expires_at").eq("id", boothId).maybeSingle();
+  const { data: booth } = await supabase.from("booths").select("event_id, status, lock_expires_at").eq("id", boothId).maybeSingle();
   if (!booth || booth.status !== "locked") return fail("This booth isn't currently locked.");
+  if (booth.event_id !== eventId) return fail("Booth not found in this event.");
 
   const base = booth.lock_expires_at && new Date(booth.lock_expires_at) > new Date() ? new Date(booth.lock_expires_at) : new Date();
   const newExpiry = new Date(base.getTime() + extraMinutes * 60_000).toISOString();
 
-  const { error } = await supabase.from("booths").update({ lock_expires_at: newExpiry }).eq("id", boothId);
+  const { error } = await supabase
+    .from("booths")
+    .update({ lock_expires_at: newExpiry })
+    .eq("id", boothId)
+    .eq("status", "locked");
   if (error) return fail("Could not extend the lock.");
 
   await logAudit(supabase, {
@@ -405,70 +500,6 @@ export async function adminExtendLockAction(boothId: string, eventId: string, ex
     .insert({ booth_id: boothId, event_type: "lock_extended", actor_id: authUser.id, details: { extra_minutes: extraMinutes } });
 
   revalidatePath(`/admin/events/${eventId}/booths`);
-  return { ok: true };
-}
-
-export async function adminSwapBoothsAction(
-  applicationIdA: string,
-  applicationIdB: string,
-  eventId: string
-): Promise<ActionResult> {
-  const { authUser } = await requireAdmin();
-  const supabase = await createClient();
-
-  const { data: apps } = await supabase
-    .from("applications")
-    .select("id, booth_id, business_id")
-    .in("id", [applicationIdA, applicationIdB]);
-
-  const appA = apps?.find((a) => a.id === applicationIdA);
-  const appB = apps?.find((a) => a.id === applicationIdB);
-  if (!appA?.booth_id || !appB?.booth_id) return fail("Both applications must already have a booth assigned.");
-
-  const { data: booths } = await supabase
-    .from("booths")
-    .select("id, price_before_vat")
-    .in("id", [appA.booth_id, appB.booth_id]);
-  const boothA = booths?.find((b) => b.id === appA.booth_id);
-  const boothB = booths?.find((b) => b.id === appB.booth_id);
-  if (!boothA || !boothB) return fail("Could not find both booths.");
-
-  const vatA = Math.round(boothA.price_before_vat * 0.05 * 100) / 100;
-  const vatB = Math.round(boothB.price_before_vat * 0.05 * 100) / 100;
-
-  await supabase
-    .from("booths")
-    .update({ current_application_id: applicationIdB, locked_by_business_id: appB.business_id })
-    .eq("id", boothA.id);
-  await supabase
-    .from("booths")
-    .update({ current_application_id: applicationIdA, locked_by_business_id: appA.business_id })
-    .eq("id", boothB.id);
-
-  await supabase
-    .from("applications")
-    .update({ booth_id: boothB.id, booth_price_before_vat: boothB.price_before_vat, vat_amount: vatB, total_amount: boothB.price_before_vat + vatB })
-    .eq("id", applicationIdA);
-  await supabase
-    .from("applications")
-    .update({ booth_id: boothA.id, booth_price_before_vat: boothA.price_before_vat, vat_amount: vatA, total_amount: boothA.price_before_vat + vatA })
-    .eq("id", applicationIdB);
-
-  await logAudit(supabase, {
-    actorId: authUser.id,
-    actorRole: "admin",
-    action: "booth.swapped",
-    entityType: "application",
-    entityId: applicationIdA,
-    metadata: { swapped_with: applicationIdB },
-  });
-  await supabase.from("booth_events").insert([
-    { booth_id: boothA.id, event_type: "swapped", actor_id: authUser.id, business_id: appB.business_id },
-    { booth_id: boothB.id, event_type: "swapped", actor_id: authUser.id, business_id: appA.business_id },
-  ]);
-
-  revalidatePath(`/admin/events/${eventId}/booths`);
-  revalidatePath(`/admin/events/${eventId}/applications`);
   return { ok: true };
 }
 
@@ -506,7 +537,7 @@ export async function createZoneAction(eventId: string, formData: FormData): Pro
 export async function deleteZoneAction(zoneId: string, eventId: string): Promise<ActionResult> {
   await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase.from("zones").delete().eq("id", zoneId);
+  const { error } = await supabase.from("zones").delete().eq("id", zoneId).eq("event_id", eventId);
   if (error) return fail("Could not delete zone.");
   revalidatePath(`/admin/events/${eventId}/booths`);
   return { ok: true };
@@ -541,13 +572,21 @@ export async function updateMapFeaturePositionAction(
   eventId: string,
   position: { mapX: number; mapY: number; mapWidth?: number; mapHeight?: number }
 ): Promise<ActionResult> {
+  if (!validMapPosition(position)) return fail("Feature position or size is outside the map bounds.");
   await requireAdmin();
   const supabase = await createClient();
   const updates: Database["public"]["Tables"]["map_features"]["Update"] = { map_x: position.mapX, map_y: position.mapY };
   if (position.mapWidth !== undefined) updates.map_width = position.mapWidth;
   if (position.mapHeight !== undefined) updates.map_height = position.mapHeight;
-  const { error } = await supabase.from("map_features").update(updates).eq("id", featureId);
+  const { data: updated, error } = await supabase
+    .from("map_features")
+    .update(updates)
+    .eq("id", featureId)
+    .eq("event_id", eventId)
+    .select("id")
+    .maybeSingle();
   if (error) return fail("Could not move map feature.");
+  if (!updated) return fail("Map feature not found in this event.");
   revalidatePath(`/admin/events/${eventId}/booths`);
   return { ok: true };
 }
@@ -555,7 +594,7 @@ export async function updateMapFeaturePositionAction(
 export async function deleteMapFeatureAction(featureId: string, eventId: string): Promise<ActionResult> {
   await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase.from("map_features").delete().eq("id", featureId);
+  const { error } = await supabase.from("map_features").delete().eq("id", featureId).eq("event_id", eventId);
   if (error) return fail("Could not delete map feature.");
   revalidatePath(`/admin/events/${eventId}/booths`);
   return { ok: true };
@@ -563,13 +602,16 @@ export async function deleteMapFeatureAction(featureId: string, eventId: string)
 
 export async function searchVendorsAction(query: string): Promise<{ id: string; business_name: string; email: string }[]> {
   await requireAdmin();
+  const normalized = query.trim().slice(0, 100).replace(/[%_]/g, " ");
+  if (normalized.length < 2) return [];
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("businesses")
     .select("id, business_name, email")
     .eq("approval_status", "approved")
-    .ilike("business_name", `%${query}%`)
+    .ilike("business_name", `%${normalized}%`)
     .limit(10);
+  if (error) return [];
   return data ?? [];
 }
 
@@ -609,11 +651,12 @@ export async function getBoothHistoryAction(boothId: string): Promise<BoothHisto
 export async function findApplicationForBusinessAction(eventId: string, businessId: string): Promise<string | null> {
   await requireAdmin();
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("applications")
     .select("id")
     .eq("event_id", eventId)
     .eq("business_id", businessId)
     .maybeSingle();
+  if (error) return null;
   return data?.id ?? null;
 }

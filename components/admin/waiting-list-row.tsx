@@ -10,6 +10,7 @@ import {
 } from "@/app/admin/events/[id]/waiting-list/actions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
@@ -39,6 +40,11 @@ export function WaitingListRow({
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [noteText, setNoteText] = React.useState(notes ?? "");
   const [boothId, setBoothId] = React.useState(availableBooths[0]?.id ?? "");
+  const noteFieldId = React.useId();
+  const boothFieldId = React.useId();
+  const selectedBoothId = availableBooths.some((booth) => booth.id === boothId)
+    ? boothId
+    : (availableBooths[0]?.id ?? "");
 
   function run(promise: Promise<{ ok: boolean; error?: string }>, message?: string) {
     startTransition(async () => {
@@ -58,21 +64,43 @@ export function WaitingListRow({
     <div className="flex flex-wrap gap-2">
       {status === "waiting" && (
         <>
-          <Button size="sm" variant="ghost" onClick={() => run(reorderPriorityAction(entryId, eventId, "up"))}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label="Move vendor up in waiting-list priority"
+            onClick={() => run(reorderPriorityAction(entryId, eventId, "up"))}
+          >
             ↑
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => run(reorderPriorityAction(entryId, eventId, "down"))}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label="Move vendor down in waiting-list priority"
+            onClick={() => run(reorderPriorityAction(entryId, eventId, "down"))}
+          >
             ↓
           </Button>
-          <Button size="sm" onClick={() => setInviteOpen(true)} disabled={availableBooths.length === 0}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setInviteOpen(true)}
+            disabled={availableBooths.length === 0}
+          >
             Invite
           </Button>
-          <Button size="sm" variant="danger" onClick={() => run(removeFromWaitingListAction(entryId, eventId), "Removed.")}>
+          <Button
+            type="button"
+            size="sm"
+            variant="danger"
+            onClick={() => run(removeFromWaitingListAction(entryId, eventId), "Removed.")}
+          >
             Remove
           </Button>
         </>
       )}
-      <Button size="sm" variant="outline" onClick={() => setNoteOpen(true)}>
+      <Button type="button" size="sm" variant="outline" onClick={() => setNoteOpen(true)}>
         Note
       </Button>
 
@@ -84,7 +112,9 @@ export function WaitingListRow({
         loading={isPending}
         onConfirm={() => run(addWaitingListNoteAction(entryId, eventId, noteText), "Note saved.")}
       >
-        <Textarea autoFocus rows={3} value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+        <Field label="Note" htmlFor={noteFieldId}>
+          <Textarea id={noteFieldId} rows={3} value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+        </Field>
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -94,15 +124,17 @@ export function WaitingListRow({
         description="Holds the booth for 30 minutes. If they don't accept in time, it releases automatically."
         confirmLabel="Send invitation"
         loading={isPending}
-        onConfirm={() => run(inviteFromWaitingListAction(entryId, eventId, boothId), "Invitation sent.")}
+        onConfirm={() => run(inviteFromWaitingListAction(entryId, eventId, selectedBoothId), "Invitation sent.")}
       >
-        <Select value={boothId} onChange={(e) => setBoothId(e.target.value)}>
-          {availableBooths.map((b) => (
-            <option key={b.id} value={b.id}>
-              Booth {b.booth_number}
-            </option>
-          ))}
-        </Select>
+        <Field label="Booth" htmlFor={boothFieldId} required>
+          <Select id={boothFieldId} value={selectedBoothId} onChange={(e) => setBoothId(e.target.value)}>
+            {availableBooths.map((b) => (
+              <option key={b.id} value={b.id}>
+                Booth {b.booth_number}
+              </option>
+            ))}
+          </Select>
+        </Field>
       </ConfirmDialog>
     </div>
   );

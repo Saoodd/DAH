@@ -6,7 +6,8 @@ export const metadata: Metadata = { title: "Bank Details" };
 
 export default async function AdminBankDetailsPage() {
   const supabase = await createClient();
-  const { data: bankDetails } = await supabase.from("bank_details").select("*").is("event_id", null).maybeSingle();
+  const { data: bankDetails, error } = await supabase.from("bank_details").select("*").is("event_id", null).maybeSingle();
+  if (error) throw new Error("Could not load bank-transfer details.");
 
   return (
     <div className="space-y-6">

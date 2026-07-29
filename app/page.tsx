@@ -15,7 +15,7 @@ const steps = [
   },
   {
     title: "Get approved",
-    description: "Saeed or Omar review your business before you can select a booth.",
+    description: "Our event team reviews your business before you can select a booth.",
   },
   {
     title: "Pick your booth",
@@ -23,18 +23,18 @@ const steps = [
   },
   {
     title: "Pay & confirm",
-    description: "ADCB Pace Pay or bank transfer, with a clear countdown and instant status updates.",
+    description: "ADCB Pace Pay or bank transfer, with a clear countdown and status tracking.",
   },
 ];
 
 const features = [
   {
-    title: "Real approval workflow",
-    description: "Profile review, reconsideration, and reapproval — not a static form.",
+    title: "Clear approval journey",
+    description: "Track profile review, requested changes, and approval in one place.",
   },
   {
     title: "Live booth availability",
-    description: "Database-backed 5-minute holds so two vendors never win the same booth.",
+    description: "Time-limited booth holds keep selection fair and prevent double-booking.",
   },
   {
     title: "Transparent payments",
@@ -63,7 +63,7 @@ export default function Home() {
                 Dubai pop-up events
               </span>
               <h1 className="mt-5 text-4xl font-semibold tracking-tight text-ink-950 sm:text-6xl">
-                Run your Dar Al Hay booth application end to end.
+                Apply, choose your booth, and get event-ready.
               </h1>
               <p className="mt-5 text-lg text-ink-600">
                 {SITE_NAME} is the vendor platform for curated pop-up events across Dubai — apply, get
@@ -94,7 +94,7 @@ export default function Home() {
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink-900 text-sm font-semibold text-brand-300">
                   {i + 1}
                 </span>
-                <p className="mt-4 text-sm font-semibold text-ink-900">{step.title}</p>
+                <h3 className="mt-4 text-sm font-semibold text-ink-900">{step.title}</h3>
                 <p className="mt-1.5 text-sm text-ink-500">{step.description}</p>
               </li>
             ))}
@@ -111,7 +111,7 @@ export default function Home() {
             <div className="mt-10 grid gap-6 sm:grid-cols-2">
               {features.map((feature) => (
                 <div key={feature.title} className="rounded-2xl border border-ink-100 bg-white p-6">
-                  <p className="text-base font-semibold text-ink-900">{feature.title}</p>
+                  <h3 className="text-base font-semibold text-ink-900">{feature.title}</h3>
                   <p className="mt-2 text-sm text-ink-500">{feature.description}</p>
                 </div>
               ))}

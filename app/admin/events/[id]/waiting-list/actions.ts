@@ -14,26 +14,23 @@ function fail(error: string): ActionResult {
 const INVITATION_MINUTES = 30;
 
 export async function reorderPriorityAction(entryId: string, eventId: string, direction: "up" | "down"): Promise<ActionResult> {
-  await requireAdmin();
+  const { authUser } = await requireAdmin();
   const supabase = await createClient();
+  const { error } = await supabase.rpc("reorder_waiting_list", {
+    p_entry_id: entryId,
+    p_event_id: eventId,
+    p_direction: direction,
+  });
+  if (error) return fail("Could not reorder this entry. Refresh and try again.");
 
-  const { data: entries } = await supabase
-    .from("waiting_list")
-    .select("id, priority")
-    .eq("event_id", eventId)
-    .eq("status", "waiting")
-    .order("priority", { ascending: false });
-  if (!entries) return fail("Waiting list not found.");
-
-  const index = entries.findIndex((e) => e.id === entryId);
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-  if (index === -1 || swapIndex < 0 || swapIndex >= entries.length) return { ok: true };
-
-  const a = entries[index];
-  const b = entries[swapIndex];
-
-  await supabase.from("waiting_list").update({ priority: b.priority }).eq("id", a.id);
-  await supabase.from("waiting_list").update({ priority: a.priority }).eq("id", b.id);
+  await logAudit(supabase, {
+    actorId: authUser.id,
+    actorRole: "admin",
+    action: "waiting_list.reordered",
+    entityType: "waiting_list",
+    entityId: entryId,
+    metadata: { event_id: eventId, direction },
+  });
 
   revalidatePath(`/admin/events/${eventId}/waiting-list`);
   return { ok: true };
@@ -42,8 +39,16 @@ export async function reorderPriorityAction(entryId: string, eventId: string, di
 export async function addWaitingListNoteAction(entryId: string, eventId: string, notes: string): Promise<ActionResult> {
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase.from("waiting_list").update({ admin_notes: notes }).eq("id", entryId);
-  if (error) return fail("Could not save the note.");
+  const normalizedNotes = notes.trim();
+  if (normalizedNotes.length > 2000) return fail("Keep the note under 2,000 characters.");
+  const { data: updated, error } = await supabase
+    .from("waiting_list")
+    .update({ admin_notes: normalizedNotes || null })
+    .eq("id", entryId)
+    .eq("event_id", eventId)
+    .select("id")
+    .maybeSingle();
+  if (error || !updated) return fail("Could not save the note.");
   await logAudit(supabase, {
     actorId: authUser.id,
     actorRole: "admin",
@@ -56,10 +61,26 @@ export async function addWaitingListNoteAction(entryId: string, eventId: string,
 }
 
 export async function removeFromWaitingListAction(entryId: string, eventId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const { authUser } = await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase.from("waiting_list").update({ status: "removed" }).eq("id", entryId);
-  if (error) return fail("Could not remove this entry.");
+  const { data: removed, error } = await supabase
+    .from("waiting_list")
+    .update({ status: "removed" })
+    .eq("id", entryId)
+    .eq("event_id", eventId)
+    .eq("status", "waiting")
+    .select("id")
+    .maybeSingle();
+  if (error || !removed) return fail("This vendor is no longer waiting.");
+
+  await logAudit(supabase, {
+    actorId: authUser.id,
+    actorRole: "admin",
+    action: "waiting_list.removed",
+    entityType: "waiting_list",
+    entityId: entryId,
+    metadata: { event_id: eventId },
+  });
   revalidatePath(`/admin/events/${eventId}/waiting-list`);
   return { ok: true };
 }
@@ -67,30 +88,21 @@ export async function removeFromWaitingListAction(entryId: string, eventId: stri
 export async function inviteFromWaitingListAction(entryId: string, eventId: string, boothId: string): Promise<ActionResult> {
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
+  const { data: entry, error: inviteError } = await supabase.rpc("invite_from_waiting_list", {
+    p_entry_id: entryId,
+    p_event_id: eventId,
+    p_booth_id: boothId,
+  });
+  if (inviteError || !entry) {
+    return fail("Could not send the invitation. The event or booth availability may have changed.");
+  }
 
-  const { data: entry } = await supabase.from("waiting_list").select("id, business_id, status").eq("id", entryId).maybeSingle();
-  if (!entry || entry.status !== "waiting") return fail("This vendor is no longer waiting.");
-
-  const { data: booth } = await supabase.from("booths").select("id, booth_number, status").eq("id", boothId).maybeSingle();
-  if (!booth || booth.status !== "available") return fail("That booth is no longer available.");
-
-  const expiresAt = new Date(Date.now() + INVITATION_MINUTES * 60_000).toISOString();
-
-  const { error: boothError } = await supabase
+  const { data: booth } = await supabase
     .from("booths")
-    .update({ status: "admin_held", held_for_business_id: entry.business_id })
-    .eq("id", boothId);
-  if (boothError) return fail("Could not hold this booth.");
-
-  const { error: entryError } = await supabase
-    .from("waiting_list")
-    .update({ status: "invited", invited_booth_id: boothId, invitation_expires_at: expiresAt })
-    .eq("id", entryId);
-  if (entryError) return fail("Could not send the invitation.");
-
-  await supabase
-    .from("booth_events")
-    .insert({ booth_id: boothId, event_type: "admin_held", business_id: entry.business_id, actor_id: authUser.id });
+    .select("booth_number")
+    .eq("id", boothId)
+    .eq("event_id", eventId)
+    .maybeSingle();
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -98,13 +110,13 @@ export async function inviteFromWaitingListAction(entryId: string, eventId: stri
     action: "waiting_list.invited",
     entityType: "waiting_list",
     entityId: entryId,
-    newValue: { booth_id: boothId, expires_at: expiresAt },
+    newValue: { booth_id: boothId, expires_at: entry.invitation_expires_at },
   });
 
   await sendNotification(supabase, {
     businessId: entry.business_id,
     templateKey: "booth_availability_invitation",
-    variables: { booth_number: booth.booth_number, minutes: String(INVITATION_MINUTES) },
+    variables: { booth_number: booth?.booth_number ?? "selected", minutes: String(INVITATION_MINUTES) },
   });
 
   revalidatePath(`/admin/events/${eventId}/waiting-list`);

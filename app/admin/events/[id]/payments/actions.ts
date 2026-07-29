@@ -11,37 +11,75 @@ function fail(error: string): ActionResult {
   return { ok: false, error };
 }
 
+const MAX_PAYMENT_MINUTES = 10_080;
+const MAX_PAYMENT_AMOUNT = 99_999_999.99;
+const MAX_REASON_LENGTH = 2_000;
+const MAX_NOTES_LENGTH = 5_000;
+
+function validWholeMinutes(value: number, minimum: number): boolean {
+  return Number.isInteger(value) && value >= minimum && value <= MAX_PAYMENT_MINUTES;
+}
+
+function normalizedMoney(value: number): number | null {
+  if (!Number.isFinite(value) || value <= 0 || value > MAX_PAYMENT_AMOUNT) return null;
+  return Math.round(value * 100) / 100;
+}
+
+function normalizeHttpsPaymentLink(value: string): string | null | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 2_048 || /[\u0000-\u001f\u007f]/.test(trimmed)) return undefined;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:" || url.username || url.password || !url.hostname) {
+      return undefined;
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function paymentMutationError(
+  error: { message: string } | null,
+  fallback: string
+): ActionResult {
+  const message = error?.message ?? "";
+  if (message.includes("PAYMENT_NOT_FOUND")) return fail("Payment not found.");
+  if (message.includes("APPLICATION_NOT_FOUND")) return fail("Application not found.");
+  if (message.includes("PAYMENT_EVENT_MISMATCH")) {
+    return fail("This payment no longer belongs to the selected event. Refresh and try again.");
+  }
+  if (message.includes("PAYMENT_AMOUNT_MISMATCH")) {
+    return fail("The payment amount no longer matches the application total. Review the booking before confirming.");
+  }
+  if (message.includes("INVALID_REFUND_AMOUNT")) {
+    return fail("The refund must be greater than zero and cannot exceed the recorded payment amount.");
+  }
+  if (message.includes("INVALID_DEADLINE_MINUTES")) return fail("Enter a valid whole-number deadline within the allowed range.");
+  if (message.includes("INVALID_PAYMENT_LINK")) return fail("Enter a valid HTTPS payment link without embedded credentials.");
+  if (message.includes("INVALID_PAYMENT_AMOUNT")) return fail("Enter a valid payment amount greater than zero.");
+  if (message.includes("INVALID_REJECTION_REASON")) return fail("Enter a valid rejection reason under 2,000 characters.");
+  if (message.includes("INVALID_PAYMENT_NOTES")) return fail("Keep payment notes under 5,000 characters.");
+  if (message.includes("PAYMENT_STATE_CONFLICT")) {
+    return fail("This payment changed while you were reviewing it. Refresh before trying again.");
+  }
+  if (message.includes("APPLICATION_STATE_CONFLICT") || message.includes("PAYMENT_BOOTH_INVALID") || message.includes("BOOTH_LOCK_EXPIRED")) {
+    return fail("The application or booth changed while you were reviewing it. Refresh before trying again.");
+  }
+  return fail(fallback);
+}
+
 export async function confirmPaymentAction(paymentId: string, eventId: string): Promise<ActionResult> {
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("id, status, application_id")
-    .eq("id", paymentId)
-    .maybeSingle();
-  if (!payment) return fail("Payment not found.");
-
-  const { data: application } = await supabase
-    .from("applications")
-    .select("id, booth_id, business_id")
-    .eq("id", payment.application_id)
-    .maybeSingle();
-  if (!application) return fail("Application not found.");
-
-  const { error } = await supabase
-    .from("payments")
-    .update({ status: "paid", verified_by: authUser.id, verified_at: new Date().toISOString(), rejection_reason: null })
-    .eq("id", paymentId);
-  if (error) return fail("Could not confirm this payment.");
-
-  await supabase.from("applications").update({ status: "confirmed", confirmed_at: new Date().toISOString() }).eq("id", application.id);
-  if (application.booth_id) {
-    await supabase.from("booths").update({ status: "confirmed" }).eq("id", application.booth_id);
-    await supabase
-      .from("booth_events")
-      .insert({ booth_id: application.booth_id, event_type: "confirmed", business_id: application.business_id, actor_id: authUser.id });
-  }
+  const { data: result, error } = await supabase.rpc("admin_confirm_payment", {
+    p_payment_id: paymentId,
+    p_event_id: eventId,
+  });
+  if (error || !result) return paymentMutationError(error, "Could not confirm this payment.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -49,43 +87,33 @@ export async function confirmPaymentAction(paymentId: string, eventId: string): 
     action: "payment.confirmed",
     entityType: "payment",
     entityId: paymentId,
-    previousValue: { status: payment.status },
-    newValue: { status: "paid" },
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, amount: result.amount },
   });
 
-  await sendNotification(supabase, { businessId: application.business_id, templateKey: "payment_approved" });
+  await sendNotification(supabase, { businessId: result.business_id, templateKey: "payment_approved" });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
   revalidatePath(`/admin/events/${eventId}/applications`);
+  revalidatePath(`/admin/events/${eventId}/booths`);
   return { ok: true };
 }
 
 export async function rejectReceiptAction(paymentId: string, eventId: string, reason: string): Promise<ActionResult> {
-  if (!reason.trim()) return fail("A reason is required.");
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) return fail("A reason is required.");
+  if (normalizedReason.length > MAX_REASON_LENGTH) {
+    return fail("Keep the rejection reason under 2,000 characters.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("status, applications(business_id)")
-    .eq("id", paymentId)
-    .maybeSingle();
-  if (!payment) return fail("Payment not found.");
-  const paymentApplication = payment.applications as unknown as { business_id: string } | null;
-
-  const { error } = await supabase
-    .from("payments")
-    .update({ status: "payment_required", rejection_reason: reason.trim() })
-    .eq("id", paymentId);
-  if (error) return fail("Could not reject this receipt.");
-
-  if (paymentApplication) {
-    await sendNotification(supabase, {
-      businessId: paymentApplication.business_id,
-      templateKey: "payment_rejected",
-      variables: { reason },
-    });
-  }
+  const { data: result, error } = await supabase.rpc("admin_reject_payment", {
+    p_payment_id: paymentId,
+    p_event_id: eventId,
+    p_reason: normalizedReason,
+  });
+  if (error || !result) return paymentMutationError(error, "Could not reject this payment submission.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -93,26 +121,34 @@ export async function rejectReceiptAction(paymentId: string, eventId: string, re
     action: "payment.rejected",
     entityType: "payment",
     entityId: paymentId,
-    previousValue: { status: payment.status },
-    newValue: { status: "payment_required", reason },
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, reason: normalizedReason, deadline_at: result.deadline_at },
+  });
+
+  await sendNotification(supabase, {
+    businessId: result.business_id,
+    templateKey: "payment_rejected",
+    variables: { reason: normalizedReason },
   });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
+  revalidatePath(`/admin/events/${eventId}/applications`);
   return { ok: true };
 }
 
 export async function extendPaymentDeadlineAction(paymentId: string, eventId: string, extraMinutes: number): Promise<ActionResult> {
+  if (!validWholeMinutes(extraMinutes, 1)) {
+    return fail("Enter a whole number of minutes between 1 and 10,080.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: payment } = await supabase.from("payments").select("deadline_at").eq("id", paymentId).maybeSingle();
-  if (!payment) return fail("Payment not found.");
-
-  const base = payment.deadline_at && new Date(payment.deadline_at) > new Date() ? new Date(payment.deadline_at) : new Date();
-  const newDeadline = new Date(base.getTime() + extraMinutes * 60_000).toISOString();
-
-  const { error } = await supabase.from("payments").update({ deadline_at: newDeadline }).eq("id", paymentId);
-  if (error) return fail("Could not extend the deadline.");
+  const { data: result, error } = await supabase.rpc("admin_extend_payment_deadline", {
+    p_payment_id: paymentId,
+    p_event_id: eventId,
+    p_extra_minutes: extraMinutes,
+  });
+  if (error || !result) return paymentMutationError(error, "Could not extend the deadline.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -120,7 +156,8 @@ export async function extendPaymentDeadlineAction(paymentId: string, eventId: st
     action: "payment.deadline_extended",
     entityType: "payment",
     entityId: paymentId,
-    newValue: { deadline_at: newDeadline },
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, deadline_at: result.deadline_at },
   });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
@@ -128,37 +165,18 @@ export async function extendPaymentDeadlineAction(paymentId: string, eventId: st
 }
 
 export async function reopenPaymentAction(paymentId: string, eventId: string, deadlineMinutes: number): Promise<ActionResult> {
+  if (!validWholeMinutes(deadlineMinutes, 5)) {
+    return fail("Enter a whole number of minutes between 5 and 10,080.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("id, status, application_id")
-    .eq("id", paymentId)
-    .maybeSingle();
-  if (!payment) return fail("Payment not found.");
-
-  const { data: application } = await supabase
-    .from("applications")
-    .select("booth_id")
-    .eq("id", payment.application_id)
-    .maybeSingle();
-  if (!application?.booth_id) {
-    return fail("This application no longer has a booth — reassign a booth first from the booth map.");
-  }
-
-  const { error } = await supabase
-    .from("payments")
-    .update({
-      status: "payment_required",
-      rejection_reason: null,
-      deadline_at: new Date(Date.now() + deadlineMinutes * 60_000).toISOString(),
-    })
-    .eq("id", paymentId);
-  if (error) return fail("Could not reopen this payment.");
-
-  await supabase.from("applications").update({ status: "awaiting_payment" }).eq("id", payment.application_id);
-  await supabase.from("booths").update({ status: "awaiting_payment" }).eq("id", application.booth_id);
+  const { data: result, error } = await supabase.rpc("admin_reopen_payment", {
+    p_payment_id: paymentId,
+    p_event_id: eventId,
+    p_deadline_minutes: deadlineMinutes,
+  });
+  if (error || !result) return paymentMutationError(error, "Could not reopen this payment.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -166,11 +184,14 @@ export async function reopenPaymentAction(paymentId: string, eventId: string, de
     action: "payment.reopened",
     entityType: "payment",
     entityId: paymentId,
-    previousValue: { status: payment.status },
-    newValue: { status: "payment_required" },
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, deadline_at: result.deadline_at },
+    metadata: { application_id: result.application_id, booth_id: result.booth_id },
   });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
+  revalidatePath(`/admin/events/${eventId}/applications`);
+  revalidatePath(`/admin/events/${eventId}/booths`);
   return { ok: true };
 }
 
@@ -178,20 +199,24 @@ export async function markRefundAction(
   paymentId: string,
   eventId: string,
   refundAmount: number,
-  full: boolean,
   notes: string
 ): Promise<ActionResult> {
+  const normalizedAmount = normalizedMoney(refundAmount);
+  if (normalizedAmount === null) return fail("Enter a valid refund amount greater than zero.");
+  const normalizedNotes = notes.trim();
+  if (normalizedNotes.length > MAX_NOTES_LENGTH) {
+    return fail("Keep payment notes under 5,000 characters.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: payment } = await supabase.from("payments").select("status").eq("id", paymentId).maybeSingle();
-  if (!payment || payment.status !== "paid") return fail("Only a paid payment can be refunded.");
-
-  const { error } = await supabase
-    .from("payments")
-    .update({ status: full ? "refunded" : "partially_refunded", refund_amount: refundAmount, notes })
-    .eq("id", paymentId);
-  if (error) return fail("Could not record the refund.");
+  const { data: result, error } = await supabase.rpc("admin_refund_payment", {
+    p_payment_id: paymentId,
+    p_event_id: eventId,
+    p_refund_amount: normalizedAmount,
+    p_notes: normalizedNotes || null,
+  });
+  if (error || !result) return paymentMutationError(error, "Could not record the refund.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -199,7 +224,8 @@ export async function markRefundAction(
     action: "payment.refunded",
     entityType: "payment",
     entityId: paymentId,
-    newValue: { refund_amount: refundAmount, full },
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, refund_amount: result.refund_amount, full: result.full_refund },
   });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
@@ -207,11 +233,19 @@ export async function markRefundAction(
 }
 
 export async function addPaymentNoteAction(paymentId: string, eventId: string, notes: string): Promise<ActionResult> {
+  const normalizedNotes = notes.trim();
+  if (normalizedNotes.length > MAX_NOTES_LENGTH) {
+    return fail("Keep payment notes under 5,000 characters.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { error } = await supabase.from("payments").update({ notes }).eq("id", paymentId);
-  if (error) return fail("Could not save the note.");
+  const { data: result, error } = await supabase.rpc("admin_update_payment_note", {
+    p_payment_id: paymentId,
+    p_event_id: eventId,
+    p_notes: normalizedNotes,
+  });
+  if (error || !result) return paymentMutationError(error, "Could not save the note.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -219,6 +253,8 @@ export async function addPaymentNoteAction(paymentId: string, eventId: string, n
     action: "payment.note_added",
     entityType: "payment",
     entityId: paymentId,
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, has_note: Boolean(normalizedNotes) },
   });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
@@ -226,11 +262,19 @@ export async function addPaymentNoteAction(paymentId: string, eventId: string, n
 }
 
 export async function attachPaymentLinkAction(paymentId: string, eventId: string, link: string): Promise<ActionResult> {
+  const normalizedLink = normalizeHttpsPaymentLink(link);
+  if (normalizedLink === undefined) {
+    return fail("Enter a valid HTTPS payment link without embedded credentials.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { error } = await supabase.from("payments").update({ payment_link: link, method: "adcb_pace_pay" }).eq("id", paymentId);
-  if (error) return fail("Could not attach the payment link.");
+  const { data: result, error } = await supabase.rpc("admin_update_payment_link", {
+    p_payment_id: paymentId,
+    p_event_id: eventId,
+    p_payment_link: normalizedLink ?? "",
+  });
+  if (error || !result) return paymentMutationError(error, "Could not attach the payment link.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -238,6 +282,8 @@ export async function attachPaymentLinkAction(paymentId: string, eventId: string
     action: "payment.link_attached",
     entityType: "payment",
     entityId: paymentId,
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, has_payment_link: Boolean(normalizedLink) },
   });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
@@ -248,35 +294,11 @@ export async function releasePaymentBoothAction(paymentId: string, eventId: stri
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("id, status, application_id")
-    .eq("id", paymentId)
-    .maybeSingle();
-  if (!payment) return fail("Payment not found.");
-
-  const { data: application } = await supabase
-    .from("applications")
-    .select("id, booth_id, business_id")
-    .eq("id", payment.application_id)
-    .maybeSingle();
-
-  if (application?.booth_id) {
-    await supabase
-      .from("booths")
-      .update({ status: "available", locked_by_business_id: null, lock_expires_at: null, current_application_id: null })
-      .eq("id", application.booth_id);
-    await supabase
-      .from("booth_events")
-      .insert({ booth_id: application.booth_id, event_type: "admin_released", business_id: application.business_id, actor_id: authUser.id });
-  }
-
-  await supabase
-    .from("applications")
-    .update({ booth_id: null, booth_price_before_vat: null, vat_amount: null, total_amount: null, status: "approved" })
-    .eq("id", payment.application_id);
-
-  await supabase.from("payments").update({ status: "expired" }).eq("id", paymentId);
+  const { data: result, error } = await supabase.rpc("admin_release_payment_booth", {
+    p_payment_id: paymentId,
+    p_event_id: eventId,
+  });
+  if (error || !result) return paymentMutationError(error, "Could not release this payment's booth.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -284,10 +306,14 @@ export async function releasePaymentBoothAction(paymentId: string, eventId: stri
     action: "payment.booth_released",
     entityType: "payment",
     entityId: paymentId,
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, booth_id: null },
+    metadata: { released_booth_id: result.booth_id },
   });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
   revalidatePath(`/admin/events/${eventId}/booths`);
+  revalidatePath(`/admin/events/${eventId}/applications`);
   return { ok: true };
 }
 
@@ -297,46 +323,37 @@ export async function recordOfflinePaymentAction(
   amount: number,
   notes: string
 ): Promise<ActionResult> {
+  const normalizedAmount = normalizedMoney(amount);
+  if (normalizedAmount === null) return fail("Enter a valid payment amount greater than zero.");
+  const normalizedNotes = notes.trim();
+  if (normalizedNotes.length > MAX_NOTES_LENGTH) {
+    return fail("Keep payment notes under 5,000 characters.");
+  }
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: application } = await supabase
-    .from("applications")
-    .select("id, booth_id, business_id")
-    .eq("id", applicationId)
-    .maybeSingle();
-  if (!application) return fail("Application not found.");
-
-  const { error } = await supabase.from("payments").upsert(
-    {
-      application_id: applicationId,
-      method: "offline",
-      status: "paid",
-      amount,
-      notes,
-      verified_by: authUser.id,
-      verified_at: new Date().toISOString(),
-    },
-    { onConflict: "application_id" }
-  );
-  if (error) return fail("Could not record this payment.");
-
-  await supabase.from("applications").update({ status: "confirmed", confirmed_at: new Date().toISOString() }).eq("id", applicationId);
-  if (application.booth_id) {
-    await supabase.from("booths").update({ status: "confirmed" }).eq("id", application.booth_id);
-  }
+  const { data: result, error } = await supabase.rpc("admin_record_offline_payment", {
+    p_application_id: applicationId,
+    p_event_id: eventId,
+    p_amount: normalizedAmount,
+    p_notes: normalizedNotes || null,
+  });
+  if (error || !result) return paymentMutationError(error, "Could not record this payment.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
     actorRole: "admin",
     action: "payment.offline_recorded",
     entityType: "payment",
-    entityId: applicationId,
-    newValue: { amount },
+    entityId: result.payment_id,
+    previousValue: { status: result.previous_status },
+    newValue: { status: result.status, amount: result.amount, method: "offline" },
+    metadata: { application_id: applicationId, booth_id: result.booth_id },
   });
 
   revalidatePath(`/admin/events/${eventId}/payments`);
   revalidatePath(`/admin/events/${eventId}/applications`);
+  revalidatePath(`/admin/events/${eventId}/booths`);
   return { ok: true };
 }
 

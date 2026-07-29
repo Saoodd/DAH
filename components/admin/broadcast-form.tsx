@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/toast";
 import type { NotificationChannel } from "@/types/database";
 
@@ -56,7 +57,19 @@ export function BroadcastForm({ events, categories, businesses }: BroadcastFormP
         toast({ title: "Couldn't send", description: result.error, variant: "error" });
         return;
       }
-      toast({ title: `Sent to ${result.sentCount} vendor(s)`, variant: "success" });
+      const sentCount = result.sentCount ?? 0;
+      const queuedCount = result.queuedCount ?? 0;
+      const failedCount = result.failedCount ?? 0;
+      const title = failedCount > 0
+        ? "Broadcast completed with issues"
+        : queuedCount > 0
+          ? "Broadcast queued"
+          : "Broadcast sent";
+      toast({
+        title,
+        description: `${sentCount} sent · ${queuedCount} queued · ${failedCount} failed`,
+        variant: failedCount > 0 ? "warning" : queuedCount > 0 ? "info" : "success",
+      });
       setBody("");
       setSubject("");
       router.refresh();
@@ -122,17 +135,26 @@ export function BroadcastForm({ events, categories, businesses }: BroadcastFormP
       )}
 
       {channel === "email" && (
-        <Field label="Subject" htmlFor="subject">
-          <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+        <Field label="Subject" htmlFor="subject" required>
+          <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} required />
         </Field>
       )}
+
+      {channel === "whatsapp" && (
+        <Alert variant="warning" title="WhatsApp delivery rules apply">
+          This direct message works only inside Meta&rsquo;s active customer-service window. Proactive reminders require an approved WhatsApp template campaign.
+        </Alert>
+      )}
       <Field label="Message" htmlFor="body" required>
-        <Textarea id="body" rows={4} value={body} onChange={(e) => setBody(e.target.value)} required />
+        <Textarea id="body" rows={4} value={body} onChange={(e) => setBody(e.target.value)} maxLength={5000} required />
       </Field>
 
       <Button type="submit" loading={isPending}>
         Send
       </Button>
+      <p className="text-xs text-ink-500">
+        Direct broadcasts are limited to 200 recipients. Use a background campaign service for larger audiences.
+      </p>
     </form>
   );
 }

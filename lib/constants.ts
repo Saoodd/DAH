@@ -142,7 +142,7 @@ export const NEXT_STEP_COPY: Record<string, { title: string; description: string
   },
   pending_review: {
     title: "Awaiting approval",
-    description: "Saeed or Omar is reviewing your business. We'll notify you once it's decided.",
+    description: "Our event team is reviewing your business. We'll notify you once a decision is made.",
   },
   rejected: {
     title: "Application not approved",

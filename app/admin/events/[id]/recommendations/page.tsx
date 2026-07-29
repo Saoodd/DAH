@@ -11,18 +11,26 @@ export default async function AdminRecommendationsPage({ params }: { params: Pro
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: event } = await supabase
+  const { data: event, error: eventError } = await supabase
     .from("events")
     .select("id, name, recommendations_enabled")
     .eq("id", id)
     .maybeSingle();
+  if (eventError) throw new Error("Could not load the recommendation workspace.");
   if (!event) notFound();
 
-  const [{ data: categories }, { data: zones }, { data: rules }] = await Promise.all([
+  const [categoriesResult, zonesResult, rulesResult] = await Promise.all([
     supabase.from("categories").select("id, name").order("sort_order"),
     supabase.from("zones").select("*").eq("event_id", id).order("name"),
     supabase.from("category_zone_rules").select("*").eq("event_id", id),
   ]);
+  if (categoriesResult.error || zonesResult.error || rulesResult.error) {
+    throw new Error("Could not load recommendation rules.");
+  }
+  const categories = categoriesResult.data;
+  const zones = zonesResult.data;
+  const rules = rulesResult.data;
+
 
   return (
     <div className="space-y-6">

@@ -12,24 +12,46 @@ interface FieldProps {
   className?: string;
 }
 
+interface FieldControlProps {
+  id?: string;
+  required?: boolean;
+  "aria-required"?: React.AriaAttributes["aria-required"];
+  "aria-invalid"?: React.AriaAttributes["aria-invalid"];
+  "aria-describedby"?: string;
+}
+
 export function Field({ label, htmlFor, error, hint, required, children, className }: FieldProps) {
   const errorId = `${htmlFor}-error`;
   const hintId = `${htmlFor}-hint`;
+  const messageId = error ? errorId : hint ? hintId : undefined;
+  let child = children;
 
-  const describedBy = error ? errorId : hint ? hintId : undefined;
-  const child =
-    React.isValidElement(children) && describedBy
-      ? React.cloneElement(children as React.ReactElement<{ "aria-describedby"?: string }>, {
-          "aria-describedby": describedBy,
-        })
-      : children;
+  if (React.isValidElement<FieldControlProps>(children)) {
+    const childProps = children.props;
+    const describedBy = Array.from(
+      new Set(
+        [childProps["aria-describedby"], messageId]
+          .filter(Boolean)
+          .flatMap((value) => value?.split(/\s+/) ?? [])
+          .filter(Boolean)
+      )
+    ).join(" ");
+
+    child = React.cloneElement(children, {
+      id: childProps.id ?? htmlFor,
+      required: childProps.required ?? (required || undefined),
+      "aria-required": childProps["aria-required"] ?? (required || undefined),
+      "aria-invalid": childProps["aria-invalid"] ?? (error ? true : undefined),
+      "aria-describedby": describedBy || undefined,
+    });
+  }
 
   return (
     <div className={cn("w-full", className)}>
       <Label htmlFor={htmlFor}>
         {label}
         {required && (
-          <span className="ml-0.5 text-brand-600" aria-hidden="true">
+          <span className="ml-0.5 text-red-600" aria-hidden="true">
             *
           </span>
         )}

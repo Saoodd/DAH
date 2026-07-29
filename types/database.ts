@@ -1,4 +1,4 @@
-// Hand-authored to mirror supabase/migrations/0001_init.sql exactly.
+// Hand-authored to mirror the schema and RPCs in supabase/migrations/.
 // Once the project is linked to a real Supabase project, regenerate with:
 //   supabase gen types typescript --linked > types/database.ts
 // and reconcile any drift.
@@ -53,6 +53,35 @@ export type PaymentStatus =
   | "expired"
   | "refunded"
   | "partially_refunded";
+
+export interface AdminPaymentTransitionResult {
+  payment_id: string;
+  application_id: string;
+  business_id: string;
+  booth_id: string | null;
+  event_id: string;
+  previous_status: PaymentStatus | null;
+  status: PaymentStatus;
+  amount: number | null;
+  refund_amount: number | null;
+  full_refund: boolean | null;
+  deadline_at: string | null;
+}
+
+export interface AdminBoothTransitionResult {
+  booth_id: string;
+  booth_number: string;
+  event_id: string;
+  application_id: string | null;
+  business_id: string | null;
+  previous_status: BoothStatus;
+  status: BoothStatus;
+  previous_application_status?: ApplicationStatus | null;
+  application_status: ApplicationStatus | null;
+  changed: boolean;
+  payment_id: string | null;
+  payment_status: PaymentStatus | null;
+}
 
 export type WaitingListStatus = "waiting" | "invited" | "accepted" | "declined" | "expired" | "removed";
 export type NotificationChannel = "email" | "sms" | "whatsapp";
@@ -466,6 +495,50 @@ export interface Database {
       };
       release_expired_booth_locks: { Args: { p_event_id?: string | null }; Returns: number };
       expire_overdue_payments: { Args: { p_event_id?: string | null }; Returns: number };
+      admin_confirm_payment: {
+        Args: { p_payment_id: string; p_event_id: string };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_reject_payment: {
+        Args: { p_payment_id: string; p_event_id: string; p_reason: string };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_extend_payment_deadline: {
+        Args: { p_payment_id: string; p_event_id: string; p_extra_minutes: number };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_reopen_payment: {
+        Args: { p_payment_id: string; p_event_id: string; p_deadline_minutes: number };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_refund_payment: {
+        Args: { p_payment_id: string; p_event_id: string; p_refund_amount: number; p_notes?: string | null };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_update_payment_note: {
+        Args: { p_payment_id: string; p_event_id: string; p_notes: string };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_update_payment_link: {
+        Args: { p_payment_id: string; p_event_id: string; p_payment_link: string };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_release_payment_booth: {
+        Args: { p_payment_id: string; p_event_id: string };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_record_offline_payment: {
+        Args: { p_application_id: string; p_event_id: string; p_amount: number; p_notes?: string | null };
+        Returns: AdminPaymentTransitionResult;
+      };
+      admin_assign_booth: {
+        Args: { p_booth_id: string; p_event_id: string; p_application_id: string };
+        Returns: AdminBoothTransitionResult;
+      };
+      admin_release_booth: {
+        Args: { p_booth_id: string; p_event_id: string; p_reason?: string | null };
+        Returns: AdminBoothTransitionResult;
+      };
       decline_booth_invitation: { Args: { p_waiting_list_id: string }; Returns: undefined };
       release_expired_invitations: { Args: { p_event_id?: string | null }; Returns: number };
       apply_to_event: { Args: { p_event_id: string }; Returns: Database["public"]["Tables"]["applications"]["Row"] };
@@ -484,6 +557,14 @@ export interface Database {
           p_max_budget?: number | null;
           p_preferred_zone_id?: string | null;
         };
+        Returns: Database["public"]["Tables"]["waiting_list"]["Row"];
+      };
+      reorder_waiting_list: {
+        Args: { p_entry_id: string; p_event_id: string; p_direction: "up" | "down" };
+        Returns: Database["public"]["Tables"]["waiting_list"]["Row"];
+      };
+      invite_from_waiting_list: {
+        Args: { p_entry_id: string; p_event_id: string; p_booth_id: string };
         Returns: Database["public"]["Tables"]["waiting_list"]["Row"];
       };
       update_business_profile: {

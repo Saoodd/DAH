@@ -12,7 +12,7 @@ import {
   attachPaymentLinkAction,
   releasePaymentBoothAction,
 } from "@/app/admin/events/[id]/payments/actions";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,14 +24,20 @@ export function PaymentActions({
   paymentId,
   eventId,
   status,
+  amount,
   paymentLink,
   notes,
+  receiptUrl,
+  hasReceipt,
 }: {
   paymentId: string;
   eventId: string;
   status: string;
+  amount: number | null;
   paymentLink: string | null;
   notes: string | null;
+  receiptUrl: string | null;
+  hasReceipt: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -54,8 +60,25 @@ export function PaymentActions({
     });
   }
 
+  const canManagePaymentLink = ["not_requested", "payment_required", "pending_payment", "failed", "expired"].includes(status);
+
   return (
     <div className="flex flex-wrap gap-2">
+      {receiptUrl && (
+        <a
+          href={receiptUrl}
+          target="_blank"
+          rel="noreferrer"
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          View receipt
+        </a>
+      )}
+      {hasReceipt && !receiptUrl && (
+        <span className="self-center text-xs font-medium text-red-700">
+          Receipt unavailable
+        </span>
+      )}
       {["pending_payment", "pending_verification"].includes(status) && (
         <Button size="sm" onClick={() => run(confirmPaymentAction(paymentId, eventId), "Payment confirmed.")} loading={isPending}>
           Confirm
@@ -81,10 +104,12 @@ export function PaymentActions({
           Refund
         </Button>
       )}
-      <Button size="sm" variant="outline" onClick={() => setDialog("link")}>
-        {paymentLink ? "Edit link" : "Attach link"}
-      </Button>
-      <Button size="sm" variant="ghost" onClick={() => setDialog("note")}>
+      {canManagePaymentLink && (
+        <Button size="sm" variant="outline" onClick={() => { setText(paymentLink ?? ""); setDialog("link"); }}>
+          {paymentLink ? "Edit link" : "Attach link"}
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" onClick={() => { setText(notes ?? ""); setDialog("note"); }}>
         Note
       </Button>
       {["payment_required", "pending_payment", "pending_verification"].includes(status) && (
@@ -104,7 +129,7 @@ export function PaymentActions({
           run(rejectReceiptAction(paymentId, eventId, text), "Rejected — vendor can resubmit.");
         }}
       >
-        <Textarea autoFocus rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Reason…" />
+        <Textarea autoFocus rows={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Reason…" />
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -115,7 +140,7 @@ export function PaymentActions({
         loading={isPending}
         onConfirm={() => run(extendPaymentDeadlineAction(paymentId, eventId, number || 30), "Deadline extended.")}
       >
-        <Input type="number" min={1} placeholder="Extra minutes" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
+        <Input type="number" min={1} max={10080} step={1} placeholder="Extra minutes" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -127,21 +152,22 @@ export function PaymentActions({
         loading={isPending}
         onConfirm={() => run(reopenPaymentAction(paymentId, eventId, number || 60), "Payment reopened.")}
       >
-        <Input type="number" min={5} placeholder="Minutes for new deadline" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
+        <Input type="number" min={5} max={10080} step={1} placeholder="Minutes for new deadline" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
       </ConfirmDialog>
 
       <ConfirmDialog
         open={dialog === "refund"}
         onOpenChange={(o) => !o && setDialog(null)}
         title="Record a refund"
+        description="The platform records a full refund automatically when the amount equals the payment total."
         confirmLabel="Save refund"
         confirmVariant="danger"
         loading={isPending}
-        onConfirm={() => run(markRefundAction(paymentId, eventId, number, false, text), "Refund recorded.")}
+        onConfirm={() => run(markRefundAction(paymentId, eventId, number, text), "Refund recorded.")}
       >
         <div className="space-y-3">
-          <Input type="number" min={0} step="0.01" placeholder="Refund amount (AED)" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
-          <Textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="Notes (optional)" />
+          <Input type="number" min={0.01} max={amount ?? 99999999.99} step="0.01" placeholder="Refund amount (AED)" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
+          <Textarea rows={2} maxLength={5000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Notes (optional)" />
         </div>
       </ConfirmDialog>
 
@@ -153,18 +179,19 @@ export function PaymentActions({
         loading={isPending}
         onConfirm={() => run(addPaymentNoteAction(paymentId, eventId, text), "Note saved.")}
       >
-        <Textarea autoFocus rows={3} value={text || notes || ""} onChange={(e) => setText(e.target.value)} />
+        <Textarea autoFocus rows={3} maxLength={5000} value={text} onChange={(e) => setText(e.target.value)} />
       </ConfirmDialog>
 
       <ConfirmDialog
         open={dialog === "link"}
         onOpenChange={(o) => !o && setDialog(null)}
         title="ADCB Pace Pay link"
+        description="Paste only a payment URL you verified in the provider portal. Saving a blank value removes the link."
         confirmLabel="Save link"
         loading={isPending}
         onConfirm={() => run(attachPaymentLinkAction(paymentId, eventId, text), "Payment link saved.")}
       >
-        <Input autoFocus value={text || paymentLink || ""} onChange={(e) => setText(e.target.value)} placeholder="https://…" />
+        <Input autoFocus type="url" inputMode="url" maxLength={2048} value={text} onChange={(e) => setText(e.target.value)} placeholder="https://…" />
       </ConfirmDialog>
 
       <ConfirmDialog

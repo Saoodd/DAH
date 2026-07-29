@@ -15,7 +15,7 @@ import {
   PAYMENT_STATUS_LABELS,
 } from "@/lib/constants";
 import { formatAED, formatDate } from "@/lib/format";
-import type { ApprovalStatus } from "@/types/database";
+import type { ApprovalStatus, BoothStatus, PaymentStatus } from "@/types/database";
 
 export const metadata: Metadata = { title: "Admin Dashboard" };
 
@@ -63,32 +63,108 @@ async function countByStatus(
   supabase: Awaited<ReturnType<typeof createClient>>,
   status: ApprovalStatus
 ) {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from("businesses")
     .select("*", { count: "exact", head: true })
     .eq("approval_status", status);
+  if (error) throw error;
   return count ?? 0;
+}
+
+const METRIC_PAGE_SIZE = 1000;
+const METRIC_ROW_LIMIT = 100_000;
+
+async function loadBoothMetrics(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  eventId: string
+): Promise<Array<{ status: BoothStatus; price_before_vat: number }>> {
+  const rows: Array<{ status: BoothStatus; price_before_vat: number }> = [];
+  for (let from = 0; from < METRIC_ROW_LIMIT; from += METRIC_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("booths")
+      .select("status, price_before_vat")
+      .eq("event_id", eventId)
+      .order("id")
+      .range(from, from + METRIC_PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if ((data?.length ?? 0) < METRIC_PAGE_SIZE) return rows;
+  }
+  throw new Error("Booth metrics exceed the 100,000-row safety limit.");
+}
+
+async function loadPaymentMetrics(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  eventId: string
+): Promise<Array<{ status: PaymentStatus; amount: number | null; refund_amount: number | null }>> {
+  const rows: Array<{ status: PaymentStatus; amount: number | null; refund_amount: number | null }> = [];
+  for (let from = 0; from < METRIC_ROW_LIMIT; from += METRIC_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("payments")
+      .select("status, amount, refund_amount, applications!inner(event_id)")
+      .eq("applications.event_id", eventId)
+      .order("id")
+      .range(from, from + METRIC_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = (data ?? []).map(({ status, amount, refund_amount }) => ({ status, amount, refund_amount }));
+    rows.push(...page);
+    if (page.length < METRIC_PAGE_SIZE) return rows;
+  }
+  throw new Error("Payment metrics exceed the 100,000-row safety limit.");
+}
+
+async function loadCategoryMetrics(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  eventId: string
+): Promise<string[]> {
+  const names: string[] = [];
+  for (let from = 0; from < METRIC_ROW_LIMIT; from += METRIC_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("applications")
+      .select("businesses(categories(name))")
+      .eq("event_id", eventId)
+      .order("id")
+      .range(from, from + METRIC_PAGE_SIZE - 1);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const business = row.businesses as unknown as { categories: { name: string } | null } | null;
+      names.push(business?.categories?.name ?? "Uncategorized");
+    }
+    if ((data?.length ?? 0) < METRIC_PAGE_SIZE) return names;
+  }
+  throw new Error("Category metrics exceed the 100,000-row safety limit.");
 }
 
 export default async function AdminDashboardPage() {
   const supabase = await createClient();
 
   const [total, pendingReview, approved, rejected, suspendedOrBlacklisted, recent] = await Promise.all([
-    supabase.from("businesses").select("*", { count: "exact", head: true }).then((r) => r.count ?? 0),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .then((result) => {
+        if (result.error) throw result.error;
+        return result.count ?? 0;
+      }),
     countByStatus(supabase, "pending_review"),
+
     countByStatus(supabase, "approved"),
     countByStatus(supabase, "rejected"),
     supabase
       .from("businesses")
       .select("*", { count: "exact", head: true })
       .in("approval_status", ["suspended", "blacklisted"])
-      .then((r) => r.count ?? 0),
+      .then((result) => {
+        if (result.error) throw result.error;
+        return result.count ?? 0;
+      }),
     supabase
       .from("businesses")
       .select("id, business_name, owner_name, approval_status, created_at")
       .order("created_at", { ascending: false })
       .limit(6),
   ]);
+  if (recent.error) throw new Error("Could not load the vendor dashboard.");
 
   const stats: Array<{
     label: string;
@@ -104,11 +180,16 @@ export default async function AdminDashboardPage() {
     { label: "Suspended / blacklisted", value: suspendedOrBlacklisted, icon: icons.shield, tone: "default" },
   ];
 
-  const { data: openEvent } = await supabase
+  const { data: openEvent, error: openEventError } = await supabase
     .from("events")
     .select("id, name")
     .eq("registration_status", "open")
+    .order("starts_at", { ascending: true })
+    .limit(1)
+
     .maybeSingle();
+  if (openEventError) throw new Error("Could not load the active event dashboard.");
+
 
   let eventStats: {
     boothCounts: Record<string, number>;
@@ -125,17 +206,15 @@ export default async function AdminDashboardPage() {
 
   if (openEvent) {
     const [
-      { data: booths },
-      { data: payments },
-      { count: waitingListCount },
-      { count: expiringHoldsCount },
-      { data: recentPaymentsRaw },
+      booths,
+      payments,
+      waitingListResult,
+      expiringHoldsResult,
+      recentPaymentsResult,
+      categoryRows,
     ] = await Promise.all([
-      supabase.from("booths").select("status, price_before_vat").eq("event_id", openEvent.id),
-      supabase
-        .from("payments")
-        .select("status, amount, applications!inner(event_id)")
-        .eq("applications.event_id", openEvent.id),
+      loadBoothMetrics(supabase, openEvent.id),
+      loadPaymentMetrics(supabase, openEvent.id),
       supabase
         .from("waiting_list")
         .select("*", { count: "exact", head: true })
@@ -153,27 +232,35 @@ export default async function AdminDashboardPage() {
         .eq("applications.event_id", openEvent.id)
         .order("created_at", { ascending: false })
         .limit(5),
+      loadCategoryMetrics(supabase, openEvent.id),
     ]);
 
+    const waitingListCount = waitingListResult.count;
+    if (waitingListResult.error || expiringHoldsResult.error || recentPaymentsResult.error) {
+      throw new Error("Could not load the active event metrics.");
+    }
+    const expiringHoldsCount = expiringHoldsResult.count;
+    const recentPaymentsRaw = recentPaymentsResult.data;
+
     const boothCounts: Record<string, number> = {};
-    for (const b of booths ?? []) boothCounts[b.status] = (boothCounts[b.status] ?? 0) + 1;
-    const totalBooths = booths?.length ?? 0;
+    for (const b of booths) boothCounts[b.status] = (boothCounts[b.status] ?? 0) + 1;
+    const totalBooths = booths.length;
     const confirmedCount = (boothCounts["confirmed"] ?? 0) + (boothCounts["awaiting_payment"] ?? 0) + (boothCounts["reserved"] ?? 0);
 
-    const expectedRevenue = (booths ?? []).reduce((sum, b) => sum + b.price_before_vat, 0);
-    const collectedRevenue = (payments ?? []).filter((p) => p.status === "paid").reduce((sum, p) => sum + (p.amount ?? 0), 0);
-    const pendingAmount = (payments ?? [])
+    const expectedRevenue = booths.reduce((sum, b) => sum + b.price_before_vat, 0);
+    const collectedRevenue = payments.reduce((sum, payment) => {
+      if (payment.status === "paid") return sum + (payment.amount ?? 0);
+      if (payment.status === "partially_refunded") {
+        return sum + Math.max(0, (payment.amount ?? 0) - (payment.refund_amount ?? 0));
+      }
+      return sum;
+    }, 0);
+    const pendingAmount = payments
       .filter((p) => ["payment_required", "pending_payment", "pending_verification"].includes(p.status))
       .reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
-    const { data: categoryRows } = await supabase
-      .from("applications")
-      .select("businesses(categories(name))")
-      .eq("event_id", openEvent.id);
     const categoryCounts = new Map<string, number>();
-    for (const row of categoryRows ?? []) {
-      const business = row.businesses as unknown as { categories: { name: string } | null } | null;
-      const name = business?.categories?.name ?? "Uncategorized";
+    for (const name of categoryRows) {
       categoryCounts.set(name, (categoryCounts.get(name) ?? 0) + 1);
     }
 

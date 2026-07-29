@@ -6,9 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PaymentActions } from "@/components/admin/payment-actions";
 import { SweepExpiredButton } from "@/components/admin/sweep-expired-button";
+import { Pagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 import { PAYMENT_STATUS_COLORS, PAYMENT_STATUS_LABELS } from "@/lib/constants";
 import { formatAED, formatDate } from "@/lib/format";
+import { getSignedFileUrl } from "@/lib/storage";
 import type { PaymentStatus } from "@/types/database";
 
 export const metadata: Metadata = { title: "Payments" };
@@ -23,38 +25,99 @@ const STATUS_FILTERS: (PaymentStatus | "all")[] = [
   "refunded",
   "partially_refunded",
 ];
+const PAGE_SIZE = 50;
+const METRIC_PAGE_SIZE = 1000;
+const METRIC_ROW_LIMIT = 100_000;
+
+async function loadPaymentMetrics(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  eventId: string
+) {
+  const rows: Array<{ status: PaymentStatus; amount: number | null; refund_amount: number | null }> = [];
+  for (let from = 0; from < METRIC_ROW_LIMIT; from += METRIC_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("payments")
+      .select("status, amount, refund_amount, applications!inner(event_id)")
+      .eq("applications.event_id", eventId)
+      .order("id")
+      .range(from, from + METRIC_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = (data ?? []).map((payment) => ({
+      status: payment.status,
+      amount: payment.amount,
+      refund_amount: payment.refund_amount,
+    }));
+    rows.push(...page);
+    if (page.length < METRIC_PAGE_SIZE) return rows;
+  }
+  throw new Error("Payment metrics exceed the 100,000-row safety limit.");
+}
 
 export default async function EventPaymentsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const { id } = await params;
-  const { status: statusParam } = await searchParams;
+  const { status: statusParam, page: pageParam } = await searchParams;
+  const parsedPage = Number.parseInt(pageParam ?? "1", 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   const status = (STATUS_FILTERS as string[]).includes(statusParam ?? "") ? (statusParam as PaymentStatus | "all") : "all";
 
   const supabase = await createClient();
-  const { data: event } = await supabase.from("events").select("id, name").eq("id", id).maybeSingle();
+  const { data: event, error: eventError } = await supabase
+    .from("events")
+    .select("id, name")
+    .eq("id", id)
+    .maybeSingle();
+  if (eventError) throw new Error("Could not load the event payment workspace.");
   if (!event) notFound();
 
-  await supabase.rpc("expire_overdue_payments", { p_event_id: id });
+  const { error: sweepError } = await supabase.rpc("expire_overdue_payments", { p_event_id: id });
+  if (sweepError) throw new Error("Could not refresh overdue payments.");
 
   let query = supabase
     .from("payments")
     .select(
-      "id, status, method, amount, payment_link, payment_reference, transfer_reference, deadline_at, notes, applications!inner(id, event_id, booth_id, businesses(business_name), booths(booth_number))"
+      "id, status, method, amount, payment_link, payment_reference, receipt_url, transfer_reference, transfer_date, deadline_at, notes, applications!inner(id, event_id, booth_id, businesses(business_name), booths(booth_number))",
+      { count: "exact" }
     )
     .eq("applications.event_id", id)
     .order("created_at", { ascending: false });
 
   if (status !== "all") query = query.eq("status", status);
 
-  const { data: payments } = await query;
+  const [paymentsResult, metricsResult] = await Promise.all([
+    query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1),
+    loadPaymentMetrics(supabase, id).then(
+      (data) => ({ data, error: null }),
+      (error: unknown) => ({ data: null, error })
+    ),
+  ]);
+  if (paymentsResult.error || metricsResult.error) {
+    throw new Error("Could not load event payments. Please try again.");
+  }
 
-  const totalCollected = (payments ?? []).filter((p) => p.status === "paid").reduce((sum, p) => sum + (p.amount ?? 0), 0);
-  const totalPending = (payments ?? [])
+  const payments = await Promise.all(
+    (paymentsResult.data ?? []).map(async (payment) => ({
+      ...payment,
+      receiptSignedUrl: payment.receipt_url
+        ? await getSignedFileUrl(supabase, "payment-receipts", payment.receipt_url)
+        : null,
+    }))
+  );
+  const metricPayments = metricsResult.data;
+
+  const totalCollected = (metricPayments ?? []).reduce((sum, payment) => {
+    if (payment.status === "paid") return sum + (payment.amount ?? 0);
+    if (payment.status === "partially_refunded") {
+      return sum + Math.max(0, (payment.amount ?? 0) - (payment.refund_amount ?? 0));
+    }
+    return sum;
+  }, 0);
+  const totalPending = (metricPayments ?? [])
     .filter((p) => ["payment_required", "pending_payment", "pending_verification"].includes(p.status))
     .reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
@@ -110,7 +173,7 @@ export default async function EventPaymentsPage({
 
       <Card>
         <CardContent className="p-0">
-          {!payments?.length ? (
+          {!payments.length ? (
             <p className="px-6 py-8 text-center text-sm text-ink-400">No payments match this filter.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -145,8 +208,11 @@ export default async function EventPaymentsPage({
                             paymentId={p.id}
                             eventId={id}
                             status={p.status}
+                            amount={p.amount}
                             paymentLink={p.payment_link}
                             notes={p.notes}
+                            receiptUrl={p.receiptSignedUrl}
+                            hasReceipt={Boolean(p.receipt_url)}
                           />
                         </td>
                       </tr>
@@ -156,6 +222,13 @@ export default async function EventPaymentsPage({
               </table>
             </div>
           )}
+          <Pagination
+            pathname={`/admin/events/${id}/payments`}
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={paymentsResult.count ?? 0}
+            query={{ status: status === "all" ? undefined : status }}
+          />
         </CardContent>
       </Card>
     </div>

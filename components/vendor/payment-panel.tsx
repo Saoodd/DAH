@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { submitAdcbReferenceAction, submitBankTransferReceiptAction } from "@/app/vendor/payment/actions";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Field } from "@/components/ui/field";
@@ -61,7 +61,12 @@ export function PaymentPanel({
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = React.useTransition();
-  const [method, setMethod] = React.useState<"adcb_pace_pay" | "bank_transfer" | null>(null);
+  const [method, setMethod] = React.useState<"adcb_pace_pay" | "bank_transfer" | null>(() =>
+    payment.method === "adcb_pace_pay" || payment.method === "bank_transfer" ? payment.method : null
+  );
+  const methodGroupId = React.useId();
+  const adcbPanelId = `${methodGroupId}-adcb-panel`;
+  const bankPanelId = `${methodGroupId}-bank-panel`;
   const remainingMs = useCountdown(["payment_required", "pending_payment"].includes(payment.status) ? payment.deadline_at : null);
 
   React.useEffect(() => {
@@ -101,39 +106,50 @@ export function PaymentPanel({
 
   return (
     <div className="space-y-6 print:space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <p className="text-sm text-ink-500">Booth {boothNumber}</p>
           <p className="text-2xl font-semibold text-ink-950">{formatAED(totalAmount)}</p>
           <p className="text-xs text-ink-400">
             {formatAED(boothPriceBeforeVat)} + {formatAED(vatAmount)} VAT
           </p>
         </div>
-        <Badge className="border-ink-200 bg-ink-50 text-ink-700 print:hidden">{PAYMENT_STATUS_LABELS[payment.status]}</Badge>
+        <Badge className="self-start border-ink-200 bg-ink-50 text-ink-700 print:hidden">
+          {PAYMENT_STATUS_LABELS[payment.status]}
+        </Badge>
       </div>
 
       {["payment_required", "pending_payment"].includes(payment.status) && remainingMs !== null && (
-        <Alert variant={remainingMs < 5 * 60_000 ? "warning" : "info"} title={`${minutes}:${String(seconds).padStart(2, "0")} remaining`}>
+        <Alert
+          variant={remainingMs < 5 * 60_000 ? "warning" : "info"}
+          title={`${minutes}:${String(seconds).padStart(2, "0")} remaining`}
+          role="status"
+          aria-live="off"
+        >
           Complete payment before the countdown ends, or your booth will be released automatically.
         </Alert>
       )}
 
       {payment.status === "expired" && (
         <Alert variant="error" title="Payment window expired">
-          Your booth was released back to availability. Your application is still active — select another booth to
-          continue.
+          Your booth was released back to availability. Return to your dashboard to review the next step for this
+          application.
         </Alert>
       )}
 
       {payment.status === "pending_verification" && (
-        <Alert variant="info" title="Receipt under review">
-          Saeed or Omar will verify your transfer shortly. Reference: {payment.transfer_reference}
-        </Alert>
-      )}
-
-      {payment.status === "pending_payment" && payment.method === "adcb_pace_pay" && (
-        <Alert variant="info" title="Payment reference submitted">
-          Reference: {payment.payment_reference}. We&rsquo;ll confirm once verified.
+        <Alert
+          variant="info"
+          title={payment.method === "adcb_pace_pay" ? "Payment reference under review" : "Receipt under review"}
+        >
+          Our event team will verify your submission shortly.
+          {(payment.method === "adcb_pace_pay" ? payment.payment_reference : payment.transfer_reference)
+            ? ` Reference: ${
+                payment.method === "adcb_pace_pay"
+                  ? payment.payment_reference
+                  : payment.transfer_reference
+              }`
+            : ""}
         </Alert>
       )}
 
@@ -151,37 +167,59 @@ export function PaymentPanel({
             {payment.transfer_reference ? ` · Ref ${payment.transfer_reference}` : ""}
             {payment.payment_reference ? ` · Ref ${payment.payment_reference}` : ""}
           </p>
-          <Button variant="outline" className="print:hidden" onClick={() => window.print()}>
+          <Button type="button" variant="outline" className="print:hidden" onClick={() => window.print()}>
             Print / save confirmation
           </Button>
         </div>
       )}
 
       {["payment_required", "pending_payment"].includes(payment.status) && (
-        <div className="grid gap-4 sm:grid-cols-2 print:hidden">
-          <button
-            type="button"
-            onClick={() => setMethod("adcb_pace_pay")}
-            className={`rounded-xl border p-4 text-left ${method === "adcb_pace_pay" ? "border-ink-900 ring-1 ring-ink-900" : "border-ink-200"}`}
-          >
-            <p className="font-semibold text-ink-900">ADCB Pace Pay</p>
-            <p className="mt-1 text-xs text-ink-500">Pay by card via the link Dar Al Hay sends you.</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMethod("bank_transfer")}
-            className={`rounded-xl border p-4 text-left ${method === "bank_transfer" ? "border-ink-900 ring-1 ring-ink-900" : "border-ink-200"}`}
-          >
-            <p className="font-semibold text-ink-900">Bank transfer (IBAN)</p>
-            <p className="mt-1 text-xs text-ink-500">Transfer directly and upload your receipt.</p>
-          </button>
-        </div>
+        <fieldset className="print:hidden" disabled={isPending}>
+          <legend className="mb-2 text-sm font-semibold text-ink-900">Choose a payment method</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block cursor-pointer">
+              <input
+                type="radio"
+                name={methodGroupId}
+                value="adcb_pace_pay"
+                checked={method === "adcb_pace_pay"}
+                onChange={() => setMethod("adcb_pace_pay")}
+                aria-controls={method === "adcb_pace_pay" ? adcbPanelId : undefined}
+                className="peer sr-only"
+              />
+              <span className="block rounded-xl border border-ink-200 p-4 text-left transition-[border-color,box-shadow] duration-150 hover:border-ink-300 peer-checked:border-ink-900 peer-checked:ring-1 peer-checked:ring-ink-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-60 motion-reduce:transition-none">
+                <span className="block font-semibold text-ink-900">ADCB Pace Pay</span>
+                <span className="mt-1 block text-xs text-ink-500">Pay by card via the link Dar Al Hay sends you.</span>
+              </span>
+            </label>
+            <label className="block cursor-pointer">
+              <input
+                type="radio"
+                name={methodGroupId}
+                value="bank_transfer"
+                checked={method === "bank_transfer"}
+                onChange={() => setMethod("bank_transfer")}
+                aria-controls={method === "bank_transfer" ? bankPanelId : undefined}
+                className="peer sr-only"
+              />
+              <span className="block rounded-xl border border-ink-200 p-4 text-left transition-[border-color,box-shadow] duration-150 hover:border-ink-300 peer-checked:border-ink-900 peer-checked:ring-1 peer-checked:ring-ink-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-60 motion-reduce:transition-none">
+                <span className="block font-semibold text-ink-900">Bank transfer (IBAN)</span>
+                <span className="mt-1 block text-xs text-ink-500">Transfer directly and upload your receipt.</span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
       )}
 
       {method === "adcb_pace_pay" && ["payment_required", "pending_payment"].includes(payment.status) && (
-        <div className="space-y-4 rounded-xl border border-ink-100 p-4 print:hidden">
+        <div id={adcbPanelId} className="space-y-4 rounded-xl border border-ink-100 p-4 print:hidden">
           {payment.payment_link ? (
-            <a href={payment.payment_link} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center rounded-xl bg-ink-900 px-4 text-sm font-medium text-white hover:bg-ink-800">
+            <a
+              href={payment.payment_link}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ className: "w-full sm:w-auto" })}
+            >
               Pay via ADCB Pace Pay
             </a>
           ) : (
@@ -202,19 +240,19 @@ export function PaymentPanel({
       )}
 
       {method === "bank_transfer" && ["payment_required", "pending_payment"].includes(payment.status) && (
-        <div className="space-y-4 rounded-xl border border-ink-100 p-4 print:hidden">
+        <div id={bankPanelId} className="space-y-4 rounded-xl border border-ink-100 p-4 print:hidden">
           {bankDetails ? (
-            <dl className="grid grid-cols-2 gap-y-1 text-sm">
+            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
               <dt className="text-ink-400">Bank</dt>
-              <dd className="text-right text-ink-800">{bankDetails.bank_name}</dd>
+              <dd className="min-w-0 text-right text-ink-800 [overflow-wrap:anywhere]">{bankDetails.bank_name}</dd>
               <dt className="text-ink-400">Account name</dt>
-              <dd className="text-right text-ink-800">{bankDetails.account_name}</dd>
+              <dd className="min-w-0 text-right text-ink-800 [overflow-wrap:anywhere]">{bankDetails.account_name}</dd>
               <dt className="text-ink-400">IBAN</dt>
-              <dd className="text-right font-mono text-ink-800">{bankDetails.iban}</dd>
+              <dd className="min-w-0 text-right font-mono text-xs text-ink-800 [overflow-wrap:anywhere] sm:text-sm">{bankDetails.iban}</dd>
               {bankDetails.swift_code && (
                 <>
                   <dt className="text-ink-400">SWIFT</dt>
-                  <dd className="text-right text-ink-800">{bankDetails.swift_code}</dd>
+                  <dd className="min-w-0 text-right text-ink-800 [overflow-wrap:anywhere]">{bankDetails.swift_code}</dd>
                 </>
               )}
             </dl>
@@ -239,7 +277,12 @@ export function PaymentPanel({
       )}
 
       {receiptSignedUrl && (
-        <a href={receiptSignedUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand-600 hover:text-brand-700 print:hidden">
+        <a
+          href={receiptSignedUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-sm text-sm font-medium text-brand-700 hover:text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-700 print:hidden"
+        >
           View submitted receipt
         </a>
       )}

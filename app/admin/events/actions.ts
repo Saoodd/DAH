@@ -5,15 +5,50 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
-import { uploadOwnedFile } from "@/lib/storage";
+import {
+  getOwnedPublicFilePath,
+  removeSupersededOwnedFile,
+  uploadOwnedFile,
+} from "@/lib/storage";
 import { eventFormSchema, slugify } from "@/lib/validations/event";
 import type { ActionResult } from "@/app/auth/actions";
 import type { Database } from "@/types/database";
 
 type EventInsert = Database["public"]["Tables"]["events"]["Insert"];
+const MAX_EVENT_BANNER_SIZE_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_EVENT_BANNER_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
 
 function fail(error: string, fieldErrors?: Record<string, string[]>): ActionResult {
   return { ok: false, error, fieldErrors };
+}
+
+function validateEventBanner(formData: FormData): ActionResult | null {
+  const banner = formData.get("banner");
+  if (!(banner instanceof File) || banner.size === 0) return null;
+  if (banner.size > MAX_EVENT_BANNER_SIZE_BYTES) {
+    return fail("Event banner is too large.", { banner: ["Must be 5 MB or smaller."] });
+  }
+  if (!ACCEPTED_EVENT_BANNER_TYPES.has(banner.type)) {
+    return fail("Unsupported event banner format.", { banner: ["Use PNG, JPEG, or WEBP."] });
+  }
+  return null;
+}
+
+async function cleanupEventBanner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  path: string | null
+) {
+  if (!path) return;
+  try {
+    const { error } = await supabase.storage.from("event-banners").remove([path]);
+    if (error) console.error("Event banner cleanup failed.", error.message);
+  } catch {
+    console.error("Event banner cleanup failed.");
+  }
 }
 
 function parseEventForm(formData: FormData) {
@@ -53,6 +88,8 @@ export async function createEventAction(formData: FormData): Promise<ActionResul
   const { authUser } = await requireAdmin();
   const parsed = parseEventForm(formData);
   if (!parsed.success) return fail("Please fix the highlighted fields.", parsed.error.flatten().fieldErrors);
+  const bannerError = validateEventBanner(formData);
+  if (bannerError) return bannerError;
   const data = parsed.data;
 
   const supabase = await createClient();
@@ -80,13 +117,21 @@ export async function createEventAction(formData: FormData): Promise<ActionResul
   };
 
   const banner = formData.get("banner");
+  let uploadedBannerPath: string | null = null;
   if (banner instanceof File && banner.size > 0) {
-    const path = await uploadOwnedFile(supabase, "event-banners", authUser.id, banner);
-    insert.banner_url = supabase.storage.from("event-banners").getPublicUrl(path).data.publicUrl;
+    try {
+      uploadedBannerPath = await uploadOwnedFile(supabase, "event-banners", authUser.id, banner);
+      insert.banner_url = supabase.storage.from("event-banners").getPublicUrl(uploadedBannerPath).data.publicUrl;
+    } catch {
+      return fail("Could not upload the event banner. Please try again.");
+    }
   }
 
   const { data: event, error } = await supabase.from("events").insert(insert).select("id").single();
-  if (error || !event) return fail("Could not create the event. Please try again.");
+  if (error || !event) {
+    await cleanupEventBanner(supabase, uploadedBannerPath);
+    return fail("Could not create the event. Please try again.");
+  }
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -105,6 +150,8 @@ export async function updateEventAction(eventId: string, formData: FormData): Pr
   const { authUser } = await requireAdmin();
   const parsed = parseEventForm(formData);
   if (!parsed.success) return fail("Please fix the highlighted fields.", parsed.error.flatten().fieldErrors);
+  const bannerError = validateEventBanner(formData);
+  if (bannerError) return bannerError;
   const data = parsed.data;
 
   const supabase = await createClient();
@@ -134,13 +181,46 @@ export async function updateEventAction(eventId: string, formData: FormData): Pr
   }
 
   const banner = formData.get("banner");
+  let uploadedBannerPath: string | null = null;
   if (banner instanceof File && banner.size > 0) {
-    const path = await uploadOwnedFile(supabase, "event-banners", authUser.id, banner);
-    updates.banner_url = supabase.storage.from("event-banners").getPublicUrl(path).data.publicUrl;
+    try {
+      uploadedBannerPath = await uploadOwnedFile(supabase, "event-banners", authUser.id, banner);
+      updates.banner_url = supabase.storage.from("event-banners").getPublicUrl(uploadedBannerPath).data.publicUrl;
+    } catch {
+      return fail("Could not upload the event banner. Please try again.");
+    }
   }
 
-  const { error } = await supabase.from("events").update(updates).eq("id", eventId);
-  if (error) return fail("Could not save the event. Please try again.");
+  const { data: updatedEvent, error } = await supabase
+    .from("events")
+    .update(updates)
+    .eq("id", eventId)
+    .select("id")
+    .maybeSingle();
+  if (error || !updatedEvent) {
+    await cleanupEventBanner(supabase, uploadedBannerPath);
+    return fail("Could not save the event. Please try again.");
+  }
+
+  if (uploadedBannerPath && existing.banner_url) {
+    const { data: anotherReference, error: referenceError } = await supabase
+      .from("events")
+      .select("id")
+      .eq("banner_url", existing.banner_url)
+      .neq("id", eventId)
+      .limit(1)
+      .maybeSingle();
+    if (referenceError) {
+      console.error("Superseded event banner reference check failed.", referenceError.message);
+    } else if (!anotherReference) {
+      await removeSupersededOwnedFile(
+        supabase,
+        "event-banners",
+        getOwnedPublicFilePath(supabase, "event-banners", existing.banner_url),
+        uploadedBannerPath
+      );
+    }
+  }
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -179,9 +259,12 @@ export async function duplicateEventAction(eventId: string): Promise<ActionResul
     end_at: source.end_at,
     setup_start_at: source.setup_start_at,
     setup_end_at: source.setup_end_at,
+    registration_opens_at: source.registration_opens_at,
+    registration_closes_at: source.registration_closes_at,
     payment_deadline_minutes: source.payment_deadline_minutes,
     booth_lock_minutes: source.booth_lock_minutes,
     recommendations_enabled: source.recommendations_enabled,
+    booth_changes_locked: source.booth_changes_locked,
     registration_status: "draft",
     duplicated_from: source.id,
     created_by: authUser.id,
@@ -205,23 +288,47 @@ export async function duplicateEventAction(eventId: string): Promise<ActionResul
 
 async function setRegistrationStatus(
   eventId: string,
-  status: "open" | "closed" | "archived" | "draft"
+  status: "open" | "closed" | "archived"
 ): Promise<ActionResult> {
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
-  const { data: existing } = await supabase.from("events").select("registration_status").eq("id", eventId).maybeSingle();
+  const { data: existing, error: lookupError } = await supabase
+    .from("events")
+    .select("registration_status, is_archived")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (lookupError) return fail("Could not load the event.");
   if (!existing) return fail("Event not found.");
+  if (status === "open" && (existing.is_archived || !["draft", "closed"].includes(existing.registration_status))) {
+    return fail("Only a draft or closed, unarchived event can be opened.");
+  }
+  if (status === "closed" && existing.registration_status !== "open") {
+    return fail("Only an open event can be closed.");
+  }
+  if (status === "archived" && existing.is_archived) {
+    return fail("This event is already archived.");
+  }
 
   const updates: Database["public"]["Tables"]["events"]["Update"] = { registration_status: status };
   if (status === "archived") updates.is_archived = true;
 
-  const { error } = await supabase.from("events").update(updates).eq("id", eventId);
+  const { data: updated, error } = await supabase
+    .from("events")
+    .update(updates)
+    .eq("id", eventId)
+    .eq("registration_status", existing.registration_status)
+    .eq("is_archived", existing.is_archived)
+    .select("id")
+    .maybeSingle();
   if (error) {
     if (error.code === "23505") {
       return fail("Another event is already open for registration. Close it first.");
     }
     return fail("Could not update the event's registration status.");
+  }
+  if (!updated) {
+    return fail("This event changed while you were reviewing it. Refresh and try again.");
   }
 
   await logAudit(supabase, {

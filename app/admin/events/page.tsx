@@ -5,17 +5,30 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { EventActions } from "@/components/admin/event-actions";
+import { Alert } from "@/components/ui/alert";
+import { Pagination } from "@/components/ui/pagination";
 import { EVENT_STATUS_COLORS, EVENT_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Events" };
+const PAGE_SIZE = 50;
 
-export default async function AdminEventsPage() {
+export default async function AdminEventsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: pageParam } = await searchParams;
+  const parsedPage = Number.parseInt(pageParam ?? "1", 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   const supabase = await createClient();
-  const { data: events } = await supabase
+  const { data: events, error, count } = await supabase
     .from("events")
-    .select("id, name, location, registration_status, start_at, end_at, is_archived")
-    .order("created_at", { ascending: false });
+    .select("id, name, location, registration_status, start_at, end_at, is_archived", {
+      count: "exact",
+    })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
   return (
     <div className="space-y-6">
@@ -29,7 +42,11 @@ export default async function AdminEventsPage() {
         </Link>
       </div>
 
-      {!events?.length ? (
+      {error ? (
+        <Alert variant="error" title="Could not load events">
+          Refresh the page to try again.
+        </Alert>
+      ) : !events?.length ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-ink-400">
             No events yet. Create your first Dar Al Hay event to get started.
@@ -68,6 +85,18 @@ export default async function AdminEventsPage() {
               </CardContent>
             </Card>
           ))}
+          {(count ?? 0) > PAGE_SIZE && (
+            <Card>
+              <CardContent className="p-0">
+                <Pagination
+                  pathname="/admin/events"
+                  page={page}
+                  pageSize={PAGE_SIZE}
+                  total={count ?? 0}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

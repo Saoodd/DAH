@@ -9,6 +9,8 @@ import type { ActionResult } from "@/app/auth/actions";
 function fail(error: string): ActionResult {
   return { ok: false, error };
 }
+const REVIEWABLE_STATUSES = ["submitted", "under_review"] as const;
+
 
 export async function approveApplicationAction(applicationId: string): Promise<ActionResult> {
   const { authUser } = await requireAdmin();
@@ -20,12 +22,19 @@ export async function approveApplicationAction(applicationId: string): Promise<A
     .eq("id", applicationId)
     .maybeSingle();
   if (!application) return fail("Application not found.");
+  if (!REVIEWABLE_STATUSES.includes(application.status as (typeof REVIEWABLE_STATUSES)[number])) {
+    return fail("Only a submitted application can be approved.");
+  }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("applications")
     .update({ status: "approved", reviewed_at: new Date().toISOString() })
-    .eq("id", applicationId);
+    .eq("id", applicationId)
+    .in("status", [...REVIEWABLE_STATUSES])
+    .select("id")
+    .maybeSingle();
   if (error) return fail("Could not approve this application.");
+  if (!updated) return fail("This application changed while you were reviewing it. Refresh and try again.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -43,7 +52,9 @@ export async function approveApplicationAction(applicationId: string): Promise<A
 }
 
 export async function rejectApplicationAction(applicationId: string, reason: string): Promise<ActionResult> {
-  if (!reason.trim()) return fail("A rejection reason is required.");
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) return fail("A rejection reason is required.");
+  if (normalizedReason.length > 2_000) return fail("Keep the rejection reason under 2,000 characters.");
   const { authUser } = await requireAdmin();
   const supabase = await createClient();
 
@@ -53,12 +64,19 @@ export async function rejectApplicationAction(applicationId: string, reason: str
     .eq("id", applicationId)
     .maybeSingle();
   if (!application) return fail("Application not found.");
+  if (!REVIEWABLE_STATUSES.includes(application.status as (typeof REVIEWABLE_STATUSES)[number])) {
+    return fail("Only a submitted application can be rejected.");
+  }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("applications")
-    .update({ status: "rejected", rejection_reason: reason.trim(), reviewed_at: new Date().toISOString() })
-    .eq("id", applicationId);
+    .update({ status: "rejected", rejection_reason: normalizedReason, reviewed_at: new Date().toISOString() })
+    .eq("id", applicationId)
+    .in("status", [...REVIEWABLE_STATUSES])
+    .select("id")
+    .maybeSingle();
   if (error) return fail("Could not reject this application.");
+  if (!updated) return fail("This application changed while you were reviewing it. Refresh and try again.");
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -67,7 +85,7 @@ export async function rejectApplicationAction(applicationId: string, reason: str
     entityType: "application",
     entityId: applicationId,
     previousValue: { status: application.status },
-    newValue: { status: "rejected", reason },
+    newValue: { status: "rejected", reason: normalizedReason },
   });
 
   revalidatePath(`/admin/events/${application.event_id}/applications`);

@@ -26,6 +26,12 @@ describe("toCsv", () => {
     expect(lines[1]).toBe("'=cmd|'/c calc'!A1,'+1");
   });
 
+  it("neutralizes formulas hidden behind whitespace or control characters", () => {
+    const csv = toCsv([{ name: "\t=HYPERLINK(\"https://example.com\")", note: "  @SUM(1,2)" }], columns);
+    const lines = csv.split("\r\n");
+    expect(lines[1]).toBe('"\'\t=HYPERLINK(""https://example.com"")","\'  @SUM(1,2)"');
+  });
+
   it("renders empty string for null/undefined values", () => {
     const csv = toCsv([{ name: null, note: undefined }], columns);
     expect(csv.split("\r\n")[1]).toBe(",");

@@ -22,11 +22,16 @@ export async function updateSession(request: NextRequest) {
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { pathname } = request.nextUrl;
+  const isVendorRoute = pathname === VENDOR_PREFIX || pathname.startsWith(`${VENDOR_PREFIX}/`);
+  const isAdminRoute = pathname === ADMIN_PREFIX || pathname.startsWith(`${ADMIN_PREFIX}/`);
 
   if (!url || !anonKey) {
-    // Supabase isn't configured yet — let public pages render instead of
-    // hard-failing the whole site. Protected routes will redirect to login
-    // once Supabase env vars are set.
+    if (isVendorRoute || isAdminRoute) {
+      return NextResponse.redirect(new URL("/login?error=service_unavailable", request.url));
+    }
+
+    // Public pages remain available while account services are unconfigured.
     return supabaseResponse;
   }
 
@@ -48,10 +53,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-  const isVendorRoute = pathname.startsWith(VENDOR_PREFIX);
-  const isAdminRoute = pathname.startsWith(ADMIN_PREFIX);
 
   if (!user && (isVendorRoute || isAdminRoute)) {
     const redirectUrl = new URL("/login", request.url);

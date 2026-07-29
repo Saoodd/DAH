@@ -37,18 +37,23 @@ export default async function AdminSetupChecklistPage({
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-ink-400">
+      <nav aria-label="Breadcrumb" className="text-sm text-ink-500">
         <Link href={`/admin/events/${id}/setup`} className="hover:text-brand-600">
           Setup check-in
         </Link>
-      </p>
+      </nav>
+
+      <div>
+        <h1 className="text-2xl font-semibold text-ink-950">
+          Booth {booth?.booth_number ?? "—"} setup checklist
+        </h1>
+        <p className="mt-1 text-sm text-ink-500">{business?.business_name ?? "Vendor"}</p>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_260px]">
         <Card>
           <CardHeader>
-            <CardTitle>
-              Booth {booth?.booth_number} · {business?.business_name}
-            </CardTitle>
+            <CardTitle>Vendor and booth details</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="mb-6 grid grid-cols-2 gap-y-1 text-sm">

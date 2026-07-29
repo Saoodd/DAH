@@ -6,8 +6,10 @@ export interface ExportColumn {
 function escapeCsvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   let str = String(value);
-  // Neutralize CSV formula injection (=, +, -, @ at start) when opened in Excel/Sheets.
-  if (/^[=+\-@]/.test(str)) str = `'${str}`;
+  // Spreadsheet engines may ignore leading control characters/whitespace
+  // before evaluating a formula. Prefix the entire cell when the first
+  // meaningful character is a formula trigger.
+  if (/^[\u0000-\u0020]*[=+\-@]/.test(str)) str = `'${str}`;
   if (/[",\n\r]/.test(str)) str = `"${str.replace(/"/g, '""')}"`;
   return str;
 }

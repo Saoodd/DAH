@@ -1,10 +1,10 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Audit Log" };
@@ -30,7 +30,9 @@ export default async function AdminAuditLogPage({
 }) {
   const { entityType, q, page: pageParam } = await searchParams;
   const entity = ENTITY_TYPES.includes(entityType ?? "") ? entityType! : "all";
-  const page = Math.max(1, Number(pageParam) || 1);
+  const parsedPage = Number.parseInt(pageParam ?? "1", 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const search = q?.trim().slice(0, 100).replace(/[%_]/g, " ") || "";
 
   const supabase = await createClient();
   let query = supabase
@@ -42,10 +44,9 @@ export default async function AdminAuditLogPage({
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
   if (entity !== "all") query = query.eq("entity_type", entity);
-  if (q) query = query.ilike("action", `%${q}%`);
+  if (search) query = query.ilike("action", `%${search}%`);
 
-  const { data: logs, count } = await query;
-  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+  const { data: logs, error, count } = await query;
 
   return (
     <div className="space-y-6">
@@ -62,14 +63,20 @@ export default async function AdminAuditLogPage({
             </option>
           ))}
         </Select>
-        <Input name="q" defaultValue={q} placeholder="Filter by action…" className="sm:w-64" />
+        <Input name="q" defaultValue={search} maxLength={100} placeholder="Filter by action…" className="sm:w-64" />
       </form>
+
+      {error ? (
+        <Alert variant="error" title="Could not load the audit log">
+          Refresh the page to try again.
+        </Alert>
+      ) : null}
 
       <Card>
         <CardContent className="p-0">
-          {!logs?.length ? (
+          {!error && !logs?.length ? (
             <p className="px-6 py-8 text-center text-sm text-ink-400">No matching audit entries.</p>
-          ) : (
+          ) : !error ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -95,28 +102,11 @@ export default async function AdminAuditLogPage({
                 </tbody>
               </table>
             </div>
-          )}
+          ) : null}
+          {!error ? <Pagination pathname="/admin/audit-log" page={page} pageSize={PAGE_SIZE} total={count ?? 0} query={{ entityType: entity === "all" ? undefined : entity, q: search || undefined }} /> : null}
         </CardContent>
       </Card>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 text-sm">
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .slice(Math.max(0, page - 3), page + 2)
-            .map((p) => (
-              <Link
-                key={p}
-                href={{ pathname: "/admin/audit-log", query: { entityType: entity, q, page: p } }}
-                className={cn(
-                  "rounded-lg px-3 py-1.5",
-                  p === page ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-100"
-                )}
-              >
-                {p}
-              </Link>
-            ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -2,9 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { uploadOwnedFile } from "@/lib/storage";
+import {
+  getOwnedPublicFilePath,
+  removeSupersededOwnedFile,
+  uploadOwnedFile,
+} from "@/lib/storage";
 import { logAudit } from "@/lib/audit";
-import { sendNotification } from "@/lib/notifications";
+import { sendTrustedNotification } from "@/lib/notifications";
 import { requireVendor } from "@/lib/dal";
 import { normalizeUaePhone } from "@/lib/format";
 import { businessProfileSchema } from "@/lib/validations/business";
@@ -17,9 +21,31 @@ import {
   MAX_PRODUCT_PHOTO_SIZE_BYTES,
 } from "@/lib/validations/business";
 import type { ActionResult } from "@/app/auth/actions";
+import { isEventRegistrationOpen } from "@/lib/event-registration";
 
 function fail(error: string, fieldErrors?: Record<string, string[]>): ActionResult {
   return { ok: false, error, fieldErrors };
+}
+
+type UploadedObject = { bucket: string; path: string };
+
+async function cleanupUploadedObjects(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  objects: UploadedObject[]
+) {
+  const pathsByBucket = new Map<string, string[]>();
+  for (const { bucket, path } of objects) {
+    pathsByBucket.set(bucket, [...(pathsByBucket.get(bucket) ?? []), path]);
+  }
+
+  for (const [bucket, paths] of pathsByBucket) {
+    try {
+      const { error } = await supabase.storage.from(bucket).remove(paths);
+      if (error) console.error(`Profile upload cleanup failed for ${bucket}.`, error.message);
+    } catch {
+      console.error(`Profile upload cleanup failed for ${bucket}.`);
+    }
+  }
 }
 
 export async function updateBusinessProfileAction(formData: FormData): Promise<ActionResult> {
@@ -53,11 +79,10 @@ export async function updateBusinessProfileAction(formData: FormData): Promise<A
   const data = parsed.data;
   const normalizedPhone = normalizeUaePhone(data.phone);
 
-  if (data.email !== business.email) {
-    const { data: emailAvailable } = await supabase.rpc("check_email_available", { p_email: data.email });
-    if (emailAvailable === false) {
-      return fail("That email is already in use by another account.", { email: ["Already in use."] });
-    }
+  if (data.email !== business.email.toLowerCase()) {
+    return fail("Email changes require a verified support request.", {
+      email: ["This account email cannot be changed here."],
+    });
   }
   if (normalizedPhone !== business.phone) {
     const { data: phoneAvailable } = await supabase.rpc("check_phone_available", { p_phone: normalizedPhone });
@@ -66,49 +91,87 @@ export async function updateBusinessProfileAction(formData: FormData): Promise<A
     }
   }
 
-  let logoUrl: string | null = null;
-  const logo = formData.get("logo");
-  if (logo instanceof File && logo.size > 0) {
-    if (logo.size > MAX_LOGO_SIZE_BYTES) return fail("Logo file is too large.", { logo: ["Must be under 3MB."] });
-    if (!ACCEPTED_IMAGE_TYPES.includes(logo.type)) {
-      return fail("Unsupported logo format.", { logo: ["Use PNG, JPEG, or WEBP."] });
-    }
-    const path = await uploadOwnedFile(supabase, "business-logos", authUser.id, logo);
-    logoUrl = supabase.storage.from("business-logos").getPublicUrl(path).data.publicUrl;
+  const logoValue = formData.get("logo");
+  const logo = logoValue instanceof File && logoValue.size > 0 ? logoValue : null;
+  if (logo?.size && logo.size > MAX_LOGO_SIZE_BYTES) {
+    return fail("Logo file is too large.", { logo: ["Must be under 3MB."] });
+  }
+  if (logo && !ACCEPTED_IMAGE_TYPES.includes(logo.type)) {
+    return fail("Unsupported logo format.", { logo: ["Use PNG, JPEG, or WEBP."] });
   }
 
-  let tradeLicenseUrl: string | null = null;
-  const tradeLicense = formData.get("tradeLicense");
-  if (tradeLicense instanceof File && tradeLicense.size > 0) {
-    if (tradeLicense.size > MAX_LICENSE_SIZE_BYTES) {
-      return fail("Trade licence file is too large.", { tradeLicense: ["Must be under 8MB."] });
-    }
-    if (!ACCEPTED_DOCUMENT_TYPES.includes(tradeLicense.type)) {
-      return fail("Unsupported trade licence format.", { tradeLicense: ["Use PNG, JPEG, WEBP, or PDF."] });
-    }
-    tradeLicenseUrl = await uploadOwnedFile(supabase, "trade-licenses", authUser.id, tradeLicense);
+  const tradeLicenseValue = formData.get("tradeLicense");
+  const tradeLicense =
+    tradeLicenseValue instanceof File && tradeLicenseValue.size > 0 ? tradeLicenseValue : null;
+  if (tradeLicense?.size && tradeLicense.size > MAX_LICENSE_SIZE_BYTES) {
+    return fail("Trade licence file is too large.", { tradeLicense: ["Must be under 8MB."] });
+  }
+  if (tradeLicense && !ACCEPTED_DOCUMENT_TYPES.includes(tradeLicense.type)) {
+    return fail("Unsupported trade licence format.", {
+      tradeLicense: ["Use PNG, JPEG, WEBP, or PDF."],
+    });
   }
 
-  let newProductPhotoUrls: string[] | null = null;
   const newProductPhotos = formData
     .getAll("productPhotos")
-    .filter((f): f is File => f instanceof File && f.size > 0);
-  if (newProductPhotos.length > 0) {
-    const existing = business.product_photo_urls ?? [];
-    const room = Math.max(0, MAX_PRODUCT_PHOTOS - existing.length);
-    const toUpload = newProductPhotos.slice(0, room);
-    const uploadedUrls: string[] = [];
-    for (const photo of toUpload) {
-      if (photo.size > MAX_PRODUCT_PHOTO_SIZE_BYTES) {
-        return fail("A product photo is too large.", { productPhotos: ["Each photo must be under 5MB."] });
-      }
-      if (!ACCEPTED_IMAGE_TYPES.includes(photo.type)) {
-        return fail("Unsupported product photo format.", { productPhotos: ["Use PNG, JPEG, or WEBP."] });
-      }
-      const path = await uploadOwnedFile(supabase, "product-photos", authUser.id, photo);
-      uploadedUrls.push(supabase.storage.from("product-photos").getPublicUrl(path).data.publicUrl);
+    .filter((file): file is File => file instanceof File && file.size > 0);
+  const existingProductPhotos = business.product_photo_urls ?? [];
+  const productPhotoRoom = Math.max(0, MAX_PRODUCT_PHOTOS - existingProductPhotos.length);
+  const productPhotosToUpload = newProductPhotos.slice(0, productPhotoRoom);
+  for (const photo of productPhotosToUpload) {
+    if (photo.size > MAX_PRODUCT_PHOTO_SIZE_BYTES) {
+      return fail("A product photo is too large.", {
+        productPhotos: ["Each photo must be under 5MB."],
+      });
     }
-    newProductPhotoUrls = uploadedUrls;
+    if (!ACCEPTED_IMAGE_TYPES.includes(photo.type)) {
+      return fail("Unsupported product photo format.", {
+        productPhotos: ["Use PNG, JPEG, or WEBP."],
+      });
+    }
+  }
+
+  const uploadedObjects: UploadedObject[] = [];
+  let uploadedLogoPath: string | null = null;
+  let uploadedTradeLicensePath: string | null = null;
+  let logoUrl: string | null = null;
+  let tradeLicenseUrl: string | null = null;
+  let newProductPhotoUrls: string[] | null = null;
+
+  try {
+    if (logo) {
+      uploadedLogoPath = await uploadOwnedFile(supabase, "business-logos", authUser.id, logo);
+      uploadedObjects.push({ bucket: "business-logos", path: uploadedLogoPath });
+      logoUrl = supabase.storage
+        .from("business-logos")
+        .getPublicUrl(uploadedLogoPath).data.publicUrl;
+    }
+
+    if (tradeLicense) {
+      uploadedTradeLicensePath = await uploadOwnedFile(
+        supabase,
+        "trade-licenses",
+        authUser.id,
+        tradeLicense
+      );
+      uploadedObjects.push({ bucket: "trade-licenses", path: uploadedTradeLicensePath });
+      tradeLicenseUrl = uploadedTradeLicensePath;
+    }
+
+    if (productPhotosToUpload.length > 0) {
+      newProductPhotoUrls = [];
+      for (const photo of productPhotosToUpload) {
+        const path = await uploadOwnedFile(supabase, "product-photos", authUser.id, photo);
+        uploadedObjects.push({ bucket: "product-photos", path });
+        newProductPhotoUrls.push(
+          supabase.storage.from("product-photos").getPublicUrl(path).data.publicUrl
+        );
+      }
+    }
+  } catch (error) {
+    await cleanupUploadedObjects(supabase, uploadedObjects);
+    console.error("Profile upload failed.", error instanceof Error ? error.message : "Unknown error");
+    return fail("Could not upload your files. Please try again.");
   }
 
   // Vendors have no direct UPDATE grant on businesses (migration 0010) —
@@ -127,10 +190,30 @@ export async function updateBusinessProfileAction(formData: FormData): Promise<A
     p_new_product_photo_urls: newProductPhotoUrls,
   });
   if (updateError) {
+    await cleanupUploadedObjects(supabase, uploadedObjects);
     if (updateError.code === "23505") {
       return fail("That email or phone number is already in use by another account.");
     }
     return fail("Could not save your profile. Please try again.");
+  }
+
+  if (uploadedLogoPath) {
+    await removeSupersededOwnedFile(
+      supabase,
+      "business-logos",
+      getOwnedPublicFilePath(supabase, "business-logos", business.logo_url, authUser.id),
+      uploadedLogoPath,
+      authUser.id
+    );
+  }
+  if (uploadedTradeLicensePath) {
+    await removeSupersededOwnedFile(
+      supabase,
+      "trade-licenses",
+      business.trade_license_url,
+      uploadedTradeLicensePath,
+      authUser.id
+    );
   }
 
   await logAudit(supabase, {
@@ -185,7 +268,7 @@ export async function submitProfileForReviewAction(): Promise<ActionResult> {
     newValue: { approval_status: "pending_review" },
   });
 
-  await sendNotification(supabase, { businessId: business.id, templateKey: "profile_submitted" });
+  await sendTrustedNotification({ businessId: business.id, templateKey: "profile_submitted" });
 
   revalidatePath("/vendor");
   return { ok: true };
@@ -208,12 +291,19 @@ export async function applyToEventAction(eventId: string): Promise<ActionResult>
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, registration_status")
+    .select(
+      "id, registration_status, registration_opens_at, registration_closes_at, end_at, is_archived"
+    )
     .eq("id", eventId)
     .maybeSingle();
 
-  if (!event || event.registration_status !== "open") {
+  if (!event || !isEventRegistrationOpen(event)) {
     return fail("This event is not currently open for registration.");
+  }
+  if (business.requires_reapproval) {
+    return fail(
+      "Your updated business profile must be approved before you can apply to this event."
+    );
   }
 
   const { data: existing } = await supabase
@@ -232,7 +322,21 @@ export async function applyToEventAction(eventId: string): Promise<ActionResult>
   // re-validates business approval, event status, and duplicate-application
   // rules server-side regardless of what this pre-check already confirmed.
   const { data: application, error } = await supabase.rpc("apply_to_event", { p_event_id: eventId });
-  if (error) return fail("Could not submit your application. Please try again.");
+  if (error) {
+    if (error.message.includes("EVENT_NOT_OPEN")) {
+      return fail("This event is no longer open for registration.");
+    }
+    if (error.message.includes("BUSINESS_REAPPROVAL_REQUIRED")) {
+      return fail("Your updated business profile must be approved before you can apply.");
+    }
+    if (error.message.includes("BUSINESS_NOT_APPROVED")) {
+      return fail("Your business must be approved before applying to an event.");
+    }
+    if (error.message.includes("ALREADY_APPLIED")) {
+      return fail("You've already applied to this event.");
+    }
+    return fail("Could not submit your application. Please try again.");
+  }
 
   await logAudit(supabase, {
     actorId: authUser.id,

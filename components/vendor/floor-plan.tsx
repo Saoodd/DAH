@@ -112,8 +112,25 @@ export function FloorPlan({
         { event: "*", schema: "public", table: "booths", filter: `event_id=eq.${eventId}` },
         (payload) => {
           setBooths((prev) => {
-            const updated = payload.new as Booth;
-            return prev.map((b) => (b.id === updated.id ? { ...b, ...updated } : b));
+            if (payload.eventType === "DELETE") {
+              const deletedId = (payload.old as Partial<Booth>).id;
+              return deletedId ? prev.filter((booth) => booth.id !== deletedId) : prev;
+            }
+
+            const changed = payload.new as Booth;
+            if (!changed.id) return prev;
+
+            const hasExisting = prev.some((booth) => booth.id === changed.id);
+            if (hasExisting) {
+              return prev.map((booth) =>
+                booth.id === changed.id ? { ...booth, ...changed } : booth
+              );
+            }
+
+            return [
+              ...prev,
+              { ...changed, recommended: false, reasons: [], warning: null },
+            ];
           });
         }
       )

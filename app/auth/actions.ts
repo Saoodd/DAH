@@ -91,16 +91,12 @@ export async function signupAction(formData: FormData): Promise<ActionResult> {
 
   const supabase = await createClient();
 
-  const [{ data: emailAvailable }, { data: phoneAvailable }] = await Promise.all([
-    supabase.rpc("check_email_available", { p_email: data.email }),
-    supabase.rpc("check_phone_available", { p_phone: normalizedPhone }),
-  ]);
-
-  if (emailAvailable === false) {
-    return fail("An account with this email already exists.", { email: ["Email already registered."] });
-  }
-  if (phoneAvailable === false) {
-    return fail("An account with this phone number already exists.", { phone: ["Phone already registered."] });
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch (error) {
+    console.error("Signup service configuration failed.", error);
+    return fail("Account creation is temporarily unavailable. Please try again later.");
   }
 
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -116,25 +112,51 @@ export async function signupAction(formData: FormData): Promise<ActionResult> {
     if (signUpError?.message.toLowerCase().includes("already registered")) {
       return fail("An account with this email already exists.", { email: ["Email already registered."] });
     }
-    return fail(signUpError?.message ?? "Could not create your account. Please try again.");
+    return fail("Could not create your account. Please try again.");
+  }
+  if (signUpData.user.identities?.length === 0) {
+    return fail("An account with this email already exists.", { email: ["Email already registered."] });
   }
 
   const userId = signUpData.user.id;
-  const admin = createAdminClient();
+  const uploadedObjects: { bucket: string; path: string }[] = [];
+  let businessId: string | null = null;
+  let failureMessage = "We couldn't finish creating your account. Please try again.";
+
+  async function compensateFailedSignup() {
+    for (const { bucket, path } of [...uploadedObjects].reverse()) {
+      try {
+        const { error } = await admin.storage.from(bucket).remove([path]);
+        if (error) console.error(`Signup storage cleanup failed for ${bucket}.`, error.message);
+      } catch {
+        console.error(`Signup storage cleanup failed for ${bucket}.`);
+      }
+    }
+
+    try {
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      if (error) console.error("Signup auth cleanup failed.", error.message);
+    } catch {
+      console.error("Signup auth cleanup failed.");
+    }
+  }
 
   try {
     const logoPath = await uploadOwnedFile(admin, "business-logos", userId, logo);
+    uploadedObjects.push({ bucket: "business-logos", path: logoPath });
     const logoUrl = admin.storage.from("business-logos").getPublicUrl(logoPath).data.publicUrl;
 
     let tradeLicenseUrl: string | null = null;
     if (hasTradeLicense) {
       const licensePath = await uploadOwnedFile(admin, "trade-licenses", userId, tradeLicense as File);
+      uploadedObjects.push({ bucket: "trade-licenses", path: licensePath });
       tradeLicenseUrl = licensePath; // private bucket — resolved via signed URL when displayed
     }
 
     const productPhotoUrls: string[] = [];
     for (const photo of productPhotos) {
       const path = await uploadOwnedFile(admin, "product-photos", userId, photo);
+      uploadedObjects.push({ bucket: "product-photos", path });
       productPhotoUrls.push(admin.storage.from("product-photos").getPublicUrl(path).data.publicUrl);
     }
 
@@ -157,26 +179,44 @@ export async function signupAction(formData: FormData): Promise<ActionResult> {
       .select("id")
       .single();
 
-    if (insertError) {
-      if (insertError.code === "23505") {
-        return fail("An account with this email or phone number already exists.");
+    if (insertError || !newBusiness) {
+      if (insertError?.code === "23505") {
+        failureMessage = "An account with this email or phone number already exists.";
       }
-      throw insertError;
+      throw insertError ?? new Error("Business profile insert returned no record.");
     }
 
-    await logAudit(admin, {
-      actorId: userId,
-      actorRole: "vendor",
-      action: "business.created",
-      entityType: "business",
-      entityId: newBusiness.id,
-      newValue: { business_name: data.businessName, email: data.email },
-    });
+    businessId = newBusiness.id;
+  } catch (error) {
+    console.error(
+      "Signup profile creation failed.",
+      error instanceof Error ? error.message : "Unknown error"
+    );
+    await compensateFailedSignup();
+    return fail(failureMessage);
+  }
 
-    await sendNotification(admin, { businessId: newBusiness.id, templateKey: "account_created" });
-  } catch (err) {
-    console.error("Signup profile creation failed", err);
-    return fail("Your account was created but we couldn't save your profile. Please contact support.");
+  if (!businessId) {
+    await compensateFailedSignup();
+    return fail(failureMessage);
+  }
+
+  await logAudit(admin, {
+    actorId: userId,
+    actorRole: "vendor",
+    action: "business.created",
+    entityType: "business",
+    entityId: businessId,
+    newValue: { business_name: data.businessName, email: data.email },
+  });
+
+  try {
+    await sendNotification(admin, { businessId, templateKey: "account_created" });
+  } catch (error) {
+    console.error(
+      "Account notification dispatch failed.",
+      error instanceof Error ? error.message : "Unknown error"
+    );
   }
 
   return { ok: true, needsEmailConfirmation: !signUpData.session };
@@ -216,9 +256,17 @@ export async function forgotPasswordAction(formData: FormData): Promise<ActionRe
   }
 
   const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
     redirectTo: `${getSiteUrl()}/auth/callback?next=/reset-password`,
   });
+
+  if (error) {
+    console.error("Password-reset request failed", {
+      status: error.status,
+      code: error.code,
+    });
+    return fail("We couldn't send a reset email right now. Please try again shortly.");
+  }
 
   // Always return ok — do not reveal whether the email exists.
   return { ok: true };

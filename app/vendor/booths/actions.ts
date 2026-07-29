@@ -3,11 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireOwnedBusiness, requireVendor } from "@/lib/dal";
-import { sendNotification } from "@/lib/notifications";
+import { sendTrustedNotification } from "@/lib/notifications";
 import type { ActionResult } from "@/app/auth/actions";
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   NO_BUSINESS: "We couldn't find your business profile.",
+  BUSINESS_NOT_APPROVED: "Your business must be approved before selecting a booth.",
+  BUSINESS_REAPPROVAL_REQUIRED:
+    "Your updated business profile must be approved before selecting a booth.",
+  EVENT_NOT_OPEN: "Booth selection is no longer open for this event.",
+  EVENT_NOT_ACTIVE: "This event is no longer active.",
   BOOTH_NOT_FOUND: "That booth no longer exists.",
   APPLICATION_NOT_ELIGIBLE: "You need an approved application for this event first.",
   BOOTH_UNAVAILABLE: "Someone else just selected this booth. Please choose another.",
@@ -16,6 +21,8 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   NOT_YOUR_BOOTH: "This isn't your current booth.",
   BOOTH_NOT_CHANGEABLE: "You can only change booths before payment is confirmed.",
   CHANGES_LOCKED: "The event organizer has locked booth changes.",
+  PAYMENT_STATE_CONFLICT:
+    "This booth can't be reconfirmed because its payment is already being processed.",
 };
 
 function translateError(error: { message: string } | null): string {
@@ -30,10 +37,15 @@ export async function lockBoothAction(boothId: string, lockMinutes: number): Pro
   const { data: booth, error } = await supabase.rpc("lock_booth", { p_booth_id: boothId, p_lock_minutes: lockMinutes });
   if (error) return { ok: false, error: translateError(error) };
 
-  await sendNotification(supabase, {
+  const { data: event } = await supabase
+    .from("events")
+    .select("booth_lock_minutes")
+    .eq("id", booth?.event_id ?? "")
+    .maybeSingle();
+  await sendTrustedNotification({
     businessId: business.id,
     templateKey: "booth_locked",
-    variables: { booth_number: booth?.booth_number ?? "", minutes: String(lockMinutes) },
+    variables: { booth_number: booth?.booth_number ?? "", minutes: String(event?.booth_lock_minutes ?? 5) },
     channels: ["email"],
   });
 
@@ -59,7 +71,7 @@ export async function confirmBoothSelectionAction(boothId: string): Promise<Acti
   if (error) return { ok: false, error: translateError(error) };
 
   const { data: event } = await supabase.from("events").select("payment_deadline_minutes").eq("id", booth?.event_id ?? "").maybeSingle();
-  await sendNotification(supabase, {
+  await sendTrustedNotification({
     businessId: business.id,
     templateKey: "payment_required",
     variables: {

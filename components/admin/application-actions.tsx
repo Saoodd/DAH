@@ -105,7 +105,7 @@ export function ApplicationActions({
         loading={isPending}
         onConfirm={reject}
       >
-        <Textarea autoFocus rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason…" />
+        <Textarea autoFocus rows={3} maxLength={2000} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason…" />
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -118,8 +118,8 @@ export function ApplicationActions({
         onConfirm={recordOffline}
       >
         <div className="space-y-3">
-          <Input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(Number(e.target.value))} placeholder="Amount (AED)" />
-          <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" />
+          <Input type="number" min={0.01} max={99999999.99} step="0.01" value={amount} onChange={(e) => setAmount(Number(e.target.value))} placeholder="Amount (AED)" />
+          <Textarea rows={2} maxLength={5000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" />
         </div>
       </ConfirmDialog>
     </div>

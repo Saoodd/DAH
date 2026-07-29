@@ -6,14 +6,21 @@ type StepState = "done" | "current" | "upcoming" | "blocked";
 interface VendorProgressProps {
   approvalStatus: ApprovalStatus;
   applicationStatus: ApplicationStatus | null;
-  hasOpenEvent: boolean;
+  hasEventContext: boolean;
 }
 
 const BOOTH_DONE: ApplicationStatus[] = ["booth_selected", "awaiting_payment", "payment_under_review", "confirmed"];
 const BOOTH_CURRENT: ApplicationStatus[] = ["approved", "booth_selection_available"];
 const PAYMENT_CURRENT: ApplicationStatus[] = ["awaiting_payment", "payment_under_review"];
 
-export function VendorProgress({ approvalStatus, applicationStatus, hasOpenEvent }: VendorProgressProps) {
+const STEP_STATE_LABELS: Record<StepState, string> = {
+  done: "Completed",
+  current: "Current step",
+  upcoming: "Not started",
+  blocked: "Unavailable",
+};
+
+export function VendorProgress({ approvalStatus, applicationStatus, hasEventContext }: VendorProgressProps) {
   const blocked = ["rejected", "suspended", "blacklisted"].includes(approvalStatus);
 
   const steps: { label: string; state: StepState }[] = [
@@ -28,7 +35,7 @@ export function VendorProgress({ approvalStatus, applicationStatus, hasOpenEvent
     {
       label: "Booth selected",
       state:
-        approvalStatus !== "approved" || !hasOpenEvent
+        approvalStatus !== "approved" || !hasEventContext
           ? "upcoming"
           : applicationStatus && BOOTH_DONE.includes(applicationStatus)
             ? "done"
@@ -48,17 +55,22 @@ export function VendorProgress({ approvalStatus, applicationStatus, hasOpenEvent
   ];
 
   return (
-    <ol className="flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:gap-0 sm:p-5">
+    <ol className="grid grid-cols-1 gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-xs sm:grid-cols-2 sm:gap-4 sm:p-5 xl:flex xl:items-center xl:gap-0">
       {steps.map((step, i) => (
-        <li key={step.label} className="flex flex-1 items-center gap-3">
-          <div className="flex items-center gap-2.5">
+        <li
+          key={step.label}
+          className="flex min-w-0 items-center gap-3 xl:flex-1"
+          aria-current={step.state === "current" ? "step" : undefined}
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
             <span
+              aria-hidden="true"
               className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                step.state === "done" && "bg-emerald-500 text-white",
-                step.state === "current" && "bg-brand-500 text-white ring-4 ring-brand-100",
-                step.state === "upcoming" && "bg-ink-100 text-ink-400",
-                step.state === "blocked" && "bg-red-500 text-white"
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors motion-reduce:transition-none",
+                step.state === "done" && "bg-emerald-700 text-white",
+                step.state === "current" && "bg-brand-700 text-white ring-4 ring-brand-100",
+                step.state === "upcoming" && "bg-ink-100 text-ink-600",
+                step.state === "blocked" && "bg-red-700 text-white"
               )}
             >
               {step.state === "done" ? (
@@ -79,15 +91,19 @@ export function VendorProgress({ approvalStatus, applicationStatus, hasOpenEvent
             </span>
             <span
               className={cn(
-                "text-sm font-medium whitespace-nowrap",
+                "min-w-0 text-sm font-medium leading-5",
                 step.state === "upcoming" ? "text-ink-400" : "text-ink-800"
               )}
             >
               {step.label}
+              <span className="sr-only"> — {STEP_STATE_LABELS[step.state]}</span>
             </span>
           </div>
           {i < steps.length - 1 && (
-            <div className={cn("hidden h-px flex-1 sm:block sm:mx-3", step.state === "done" ? "bg-emerald-300" : "bg-ink-100")} />
+            <div
+              aria-hidden="true"
+              className={cn("mx-3 hidden h-px flex-1 xl:block", step.state === "done" ? "bg-emerald-300" : "bg-ink-100")}
+            />
           )}
         </li>
       ))}

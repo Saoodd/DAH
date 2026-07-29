@@ -23,6 +23,11 @@ function toDatetimeLocal(iso: string | null): string {
   return local.toISOString().slice(0, 16);
 }
 
+function datetimeLocalToIso(value: string | undefined): string {
+  if (!value) return "";
+  return new Date(value).toISOString();
+}
+
 export interface EventFormDefaults {
   name: string;
   location: string;
@@ -108,12 +113,12 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
     formData.set("description", values.description ?? "");
     formData.set("vendorRules", values.vendorRules ?? "");
     formData.set("setupInstructions", values.setupInstructions ?? "");
-    formData.set("startAt", values.startAt);
-    formData.set("endAt", values.endAt);
-    formData.set("setupStartAt", values.setupStartAt ?? "");
-    formData.set("setupEndAt", values.setupEndAt ?? "");
-    formData.set("registrationOpensAt", values.registrationOpensAt ?? "");
-    formData.set("registrationClosesAt", values.registrationClosesAt ?? "");
+    formData.set("startAt", datetimeLocalToIso(values.startAt));
+    formData.set("endAt", datetimeLocalToIso(values.endAt));
+    formData.set("setupStartAt", datetimeLocalToIso(values.setupStartAt));
+    formData.set("setupEndAt", datetimeLocalToIso(values.setupEndAt));
+    formData.set("registrationOpensAt", datetimeLocalToIso(values.registrationOpensAt));
+    formData.set("registrationClosesAt", datetimeLocalToIso(values.registrationClosesAt));
     formData.set("paymentDeadlineMinutes", String(values.paymentDeadlineMinutes));
     formData.set("boothLockMinutes", String(values.boothLockMinutes));
     if (values.recommendationsEnabled) formData.set("recommendationsEnabled", "on");
@@ -140,12 +145,13 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Event name" htmlFor="name" error={errors.name?.message} required>
-          <Input id="name" {...register("name")} aria-invalid={!!errors.name} />
+          <Input id="name" maxLength={120} {...register("name")} aria-invalid={!!errors.name} />
         </Field>
         <Field label="Location" htmlFor="location" error={errors.location?.message}>
           <Input
             id="location"
             placeholder="e.g. Dubai Design District"
+            maxLength={200}
             {...register("location")}
             aria-invalid={!!errors.location}
           />
@@ -162,35 +168,66 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Setup start" htmlFor="setupStartAt" hint="Optional">
-          <Input id="setupStartAt" type="datetime-local" {...register("setupStartAt")} />
+        <Field label="Setup start" htmlFor="setupStartAt" hint="Optional" error={errors.setupStartAt?.message}>
+          <Input
+            id="setupStartAt"
+            type="datetime-local"
+            {...register("setupStartAt")}
+            aria-invalid={!!errors.setupStartAt}
+          />
         </Field>
-        <Field label="Setup end" htmlFor="setupEndAt" hint="Optional">
-          <Input id="setupEndAt" type="datetime-local" {...register("setupEndAt")} />
+        <Field label="Setup end" htmlFor="setupEndAt" hint="Optional" error={errors.setupEndAt?.message}>
+          <Input
+            id="setupEndAt"
+            type="datetime-local"
+            {...register("setupEndAt")}
+            aria-invalid={!!errors.setupEndAt}
+          />
         </Field>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Registration opens" htmlFor="registrationOpensAt" hint="Optional — informational only">
-          <Input id="registrationOpensAt" type="datetime-local" {...register("registrationOpensAt")} />
+        <Field
+          label="Registration opens"
+          htmlFor="registrationOpensAt"
+          hint="Optional"
+          error={errors.registrationOpensAt?.message}
+        >
+          <Input
+            id="registrationOpensAt"
+            type="datetime-local"
+            {...register("registrationOpensAt")}
+            aria-invalid={!!errors.registrationOpensAt}
+          />
         </Field>
-        <Field label="Registration closes" htmlFor="registrationClosesAt" hint="Optional — informational only">
-          <Input id="registrationClosesAt" type="datetime-local" {...register("registrationClosesAt")} />
+        <Field
+          label="Registration closes"
+          htmlFor="registrationClosesAt"
+          hint="Optional"
+          error={errors.registrationClosesAt?.message}
+        >
+          <Input
+            id="registrationClosesAt"
+            type="datetime-local"
+            {...register("registrationClosesAt")}
+            aria-invalid={!!errors.registrationClosesAt}
+          />
         </Field>
       </div>
 
       <Field label="Description" htmlFor="description" error={errors.description?.message}>
-        <Textarea id="description" rows={3} {...register("description")} aria-invalid={!!errors.description} />
+        <Textarea id="description" rows={3} maxLength={3000} {...register("description")} aria-invalid={!!errors.description} />
       </Field>
 
       <Field label="Vendor rules" htmlFor="vendorRules" error={errors.vendorRules?.message}>
-        <Textarea id="vendorRules" rows={3} {...register("vendorRules")} aria-invalid={!!errors.vendorRules} />
+        <Textarea id="vendorRules" rows={3} maxLength={10000} {...register("vendorRules")} aria-invalid={!!errors.vendorRules} />
       </Field>
 
       <Field label="Setup instructions" htmlFor="setupInstructions" error={errors.setupInstructions?.message}>
         <Textarea
           id="setupInstructions"
           rows={3}
+          maxLength={10000}
           {...register("setupInstructions")}
           aria-invalid={!!errors.setupInstructions}
         />
@@ -208,6 +245,7 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
             id="paymentDeadlineMinutes"
             type="number"
             min={5}
+            max={10080}
             {...register("paymentDeadlineMinutes", { valueAsNumber: true })}
             aria-invalid={!!errors.paymentDeadlineMinutes}
           />
@@ -223,6 +261,7 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
             id="boothLockMinutes"
             type="number"
             min={1}
+            max={120}
             {...register("boothLockMinutes", { valueAsNumber: true })}
             aria-invalid={!!errors.boothLockMinutes}
           />
@@ -240,7 +279,7 @@ export function EventForm({ eventId, bannerUrl, defaultValues }: EventFormProps)
         </label>
       </div>
 
-      <Field label="Event banner" htmlFor="banner" hint="Optional">
+      <Field label="Event banner" htmlFor="banner" hint="Optional — PNG, JPEG, or WEBP, up to 5 MB">
         <FileInput
           id="banner"
           accept="image/png,image/jpeg,image/webp"

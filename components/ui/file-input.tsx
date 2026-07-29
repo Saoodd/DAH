@@ -10,26 +10,61 @@ interface FileInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement
 }
 
 export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(
-  ({ className, onFilesChange, previewUrls, hint, multiple, id, ...props }, ref) => {
+  (
+    {
+      className,
+      onFilesChange,
+      previewUrls,
+      hint,
+      multiple,
+      id,
+      "aria-describedby": ariaDescribedBy,
+      ...props
+    },
+    ref
+  ) => {
     const [localPreviews, setLocalPreviews] = React.useState<string[]>([]);
     const [fileName, setFileName] = React.useState<string | null>(null);
+    const generatedId = React.useId();
+    const inputId = id ?? generatedId;
+    const hintId = hint ? `${inputId}-hint` : undefined;
+    const describedBy = [ariaDescribedBy, hintId].filter(Boolean).join(" ") || undefined;
+
+    React.useEffect(() => {
+      return () => {
+        localPreviews.forEach((url) => URL.revokeObjectURL(url));
+      };
+    }, [localPreviews]);
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
       const files = Array.from(e.target.files ?? []);
       onFilesChange?.(files);
       setFileName(files.length === 1 ? files[0].name : files.length > 1 ? `${files.length} files selected` : null);
-      setLocalPreviews(files.filter((f) => f.type.startsWith("image/")).map((f) => URL.createObjectURL(f)));
+      setLocalPreviews(files.filter((file) => file.type.startsWith("image/")).map((file) => URL.createObjectURL(file)));
     }
 
-    const previews = localPreviews.length > 0 ? localPreviews : (previewUrls ?? []);
+    const previews = fileName ? localPreviews : (previewUrls ?? []);
 
     return (
       <div>
+        <input
+          id={inputId}
+          ref={ref}
+          type="file"
+          multiple={multiple}
+          className="peer sr-only"
+          onChange={handleChange}
+          aria-describedby={describedBy}
+          {...props}
+        />
         <label
-          htmlFor={id}
+          htmlFor={inputId}
           className={cn(
             "group flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-ink-200 bg-ink-50/50 px-4 py-7 text-center transition-colors duration-150",
             "hover:border-brand-300 hover:bg-brand-50/50",
+            "peer-focus-visible:border-brand-600 peer-focus-visible:outline-none peer-focus-visible:ring-4 peer-focus-visible:ring-brand-100",
+            "peer-[aria-invalid=true]:border-red-400 peer-[aria-invalid=true]:bg-red-50/40",
+            "peer-disabled:cursor-not-allowed peer-disabled:opacity-60",
             className
           )}
         >
@@ -43,20 +78,19 @@ export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(
               />
             </svg>
           </div>
-          <span className="text-sm font-medium text-ink-700">
+          <span className="text-sm font-medium text-ink-700" aria-live="polite">
             {fileName ?? (multiple ? "Upload files" : "Upload a file")}
           </span>
-          {hint && <span className="text-xs text-ink-400">{hint}</span>}
-          <input id={id} ref={ref} type="file" multiple={multiple} className="hidden" onChange={handleChange} {...props} />
+          {hint && <span id={hintId} className="text-xs text-ink-400">{hint}</span>}
         </label>
         {previews.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="File previews">
             {previews.map((src, i) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={src + i}
                 src={src}
-                alt=""
+                alt={`File preview ${i + 1}`}
                 className="h-16 w-16 rounded-lg object-cover shadow-xs ring-1 ring-ink-200"
               />
             ))}

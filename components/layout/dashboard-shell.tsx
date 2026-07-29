@@ -28,16 +28,41 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
   React.useEffect(() => {
     if (!mobileOpen) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
     drawerRef.current?.querySelector<HTMLElement>("button, a")?.focus();
     document.body.style.overflow = "hidden";
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setMobileOpen(false);
+      if (e.key === "Escape") {
+        setMobileOpen(false);
+        return;
+      }
+      if (e.key !== "Tab" || !drawerRef.current) return;
+
+      const focusable = Array.from(
+        drawerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((element) => !element.hasAttribute("hidden"));
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus();
     };
   }, [mobileOpen]);
@@ -53,7 +78,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
             onClick={() => setMobileOpen(false)}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
               active ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-100"
             )}
           >
@@ -85,7 +110,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
             <form action={logoutAction}>
               <button
                 type="submit"
-                className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-600 hover:bg-ink-100"
+                className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-600 hover:bg-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
               >
                 <LogoutIcon />
                 Log out
@@ -108,7 +133,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
             type="button"
             aria-label="Open menu"
             onClick={() => setMobileOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-ink-700 hover:bg-ink-100"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-ink-700 hover:bg-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
           >
             <MenuIcon />
           </button>
@@ -130,7 +155,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
                   type="button"
                   aria-label="Close menu"
                   onClick={() => setMobileOpen(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
                 >
                   <CloseIcon />
                 </button>
@@ -142,7 +167,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
                   <form action={logoutAction}>
                     <button
                       type="submit"
-                      className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-600 hover:bg-ink-100"
+                      className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-600 hover:bg-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
                     >
                       <LogoutIcon />
                       Log out

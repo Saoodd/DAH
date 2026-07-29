@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light;
   --background: #faf9f6;
   --foreground: #14120f;
 
@@ -19,7 +20,7 @@
   --color-ink-100: #ececef;
   --color-ink-200: #d9d9de;
   --color-ink-300: #b6b6bf;
-  --color-ink-400: #8b8b96;
+  --color-ink-400: #71717a;
   --color-ink-500: #66666f;
   --color-ink-600: #47474f;
   --color-ink-700: #2e2e34;
@@ -115,14 +116,6 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0c;
-    --foreground: #f2f2f3;
-    --shadow-color: 0 0 0;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -133,6 +126,20 @@ body {
 ::selection {
   background: var(--color-brand-200);
   color: var(--color-ink-950);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @layer utilities {

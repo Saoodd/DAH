@@ -18,7 +18,7 @@ export function SubmitProfileButton() {
         toast({ title: "Couldn't submit", description: result.error, variant: "error" });
         return;
       }
-      toast({ title: "Profile submitted", description: "Saeed or Omar will review it shortly.", variant: "success" });
+      toast({ title: "Profile submitted", description: "Our event team will review it shortly.", variant: "success" });
       router.refresh();
     });
   }

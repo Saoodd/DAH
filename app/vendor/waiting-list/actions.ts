@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireOwnedBusiness } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
-import { sendNotification } from "@/lib/notifications";
+import { sendTrustedNotification } from "@/lib/notifications";
 import type { ActionResult } from "@/app/auth/actions";
 
 function fail(error: string): ActionResult {
@@ -38,7 +38,7 @@ export async function joinWaitingListAction(eventId: string, formData: FormData)
     newValue: { event_id: eventId },
   });
 
-  await sendNotification(supabase, { businessId: business.id, templateKey: "waitlist_joined" });
+  await sendTrustedNotification({ businessId: business.id, templateKey: "waitlist_joined" });
 
   revalidatePath("/vendor/booths");
   return { ok: true };

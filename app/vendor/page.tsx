@@ -3,6 +3,7 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import { getOwnedBusiness } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
+import { isEventRegistrationOpen } from "@/lib/event-registration";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { ApplicationStatus, Database } from "@/types/database";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -34,6 +36,45 @@ const toneCardClasses: Record<"warning" | "info" | "error", string> = {
   info: "border-blue-200 bg-blue-50/60",
   error: "border-red-200 bg-red-50/60",
 };
+
+type DashboardEvent = Pick<
+  Database["public"]["Tables"]["events"]["Row"],
+  | "id"
+  | "name"
+  | "location"
+  | "description"
+  | "vendor_rules"
+  | "setup_instructions"
+  | "start_at"
+  | "end_at"
+  | "registration_status"
+  | "registration_opens_at"
+  | "registration_closes_at"
+  | "is_archived"
+>;
+
+const ACTIVE_APPLICATION_STATUSES: ApplicationStatus[] = [
+  "submitted",
+  "under_review",
+  "approved",
+  "booth_selection_available",
+  "booth_selected",
+  "awaiting_payment",
+  "payment_under_review",
+  "confirmed",
+];
+
+function relatedEvent(value: unknown): DashboardEvent | null {
+  if (Array.isArray(value)) return (value[0] as DashboardEvent | undefined) ?? null;
+  return (value as DashboardEvent | null) ?? null;
+}
+
+function isUpcomingOrActiveEvent(event: DashboardEvent | null, now: Date = new Date()): boolean {
+  if (!event || event.is_archived) return false;
+  if (!event.end_at) return true;
+  const endAt = Date.parse(event.end_at);
+  return Number.isNaN(endAt) || endAt > now.getTime();
+}
 
 export default async function VendorDashboardPage() {
   const business = await getOwnedBusiness();
@@ -65,27 +106,44 @@ export default async function VendorDashboardPage() {
   const nextStep = NEXT_STEP_COPY[business.approval_status];
   const nextStepTone = NEXT_STEP_TONE[business.approval_status] ?? "info";
 
-  const { data: openEvent } = await supabase
-    .from("events")
-    .select("id, name, location, description, vendor_rules, setup_instructions, start_at, end_at")
-    .eq("registration_status", "open")
-    .maybeSingle();
+  const [registrationResult, applicationsResult] = await Promise.all([
+    supabase
+      .from("events")
+      .select(
+        "id, name, location, description, vendor_rules, setup_instructions, start_at, end_at, registration_status, registration_opens_at, registration_closes_at, is_archived"
+      )
+      .eq("registration_status", "open")
+      .eq("is_archived", false)
+      .order("start_at", { ascending: true }),
+    supabase
+      .from("applications")
+      .select(
+        "id, event_id, status, rejection_reason, created_at, events(id, name, location, description, vendor_rules, setup_instructions, start_at, end_at, registration_status, registration_opens_at, registration_closes_at, is_archived)"
+      )
+      .eq("business_id", business.id)
+      .order("created_at", { ascending: false }),
+  ]);
 
-  const { data: currentApplication } = openEvent
-    ? await supabase
-        .from("applications")
-        .select("id, status, rejection_reason")
-        .eq("event_id", openEvent.id)
-        .eq("business_id", business.id)
-        .maybeSingle()
-    : { data: null };
-
-  const { data: pastApplications } = await supabase
-    .from("applications")
-    .select("id, status, created_at, events(id, name, start_at, end_at, location)")
-    .eq("business_id", business.id)
-    .neq("event_id", openEvent?.id ?? "00000000-0000-0000-0000-000000000000")
-    .order("created_at", { ascending: false });
+  const openEvent = registrationResult.data?.find((event) => isEventRegistrationOpen(event)) ?? null;
+  const applications = applicationsResult.data ?? [];
+  const currentApplication = openEvent
+    ? applications.find((application) => application.event_id === openEvent.id) ?? null
+    : null;
+  const activeApplication =
+    applications.find(
+      (application) =>
+        ACTIVE_APPLICATION_STATUSES.includes(application.status) &&
+        isUpcomingOrActiveEvent(relatedEvent(application.events))
+    ) ?? null;
+  const activeApplicationToShow =
+    activeApplication && activeApplication.id !== currentApplication?.id ? activeApplication : null;
+  const activeEvent = activeApplicationToShow ? relatedEvent(activeApplicationToShow.events) : null;
+  const activeRegistrationOpen = activeEvent ? isEventRegistrationOpen(activeEvent) : false;
+  const progressApplication = activeApplication ?? currentApplication;
+  const pastApplications = applications.filter(
+    (application) =>
+      application.id !== currentApplication?.id && application.id !== activeApplicationToShow?.id
+  );
 
   return (
     <div className="space-y-6">
@@ -99,10 +157,16 @@ export default async function VendorDashboardPage() {
         </Badge>
       </div>
 
+      {(registrationResult.error || applicationsResult.error) && (
+        <Alert variant="error" title="Some event information could not be loaded">
+          Refresh the page to try again. Your profile information is still safe.
+        </Alert>
+      )}
+
       <VendorProgress
         approvalStatus={business.approval_status}
-        applicationStatus={currentApplication?.status ?? null}
-        hasOpenEvent={!!openEvent}
+        applicationStatus={progressApplication?.status ?? null}
+        hasEventContext={Boolean(openEvent || activeApplication)}
       />
 
       {nextStep && (
@@ -183,11 +247,92 @@ export default async function VendorDashboardPage() {
         </CardContent>
       </Card>
 
+      {activeApplicationToShow && activeEvent && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Active application</CardTitle>
+            <CardDescription>
+              {activeRegistrationOpen
+                ? "Your application is in progress."
+                : "Registration is not currently open, but your application remains available."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="font-semibold text-ink-900">{activeEvent.name}</p>
+              <p className="mt-1 text-sm text-ink-500">
+                {activeEvent.location ?? "Location TBA"} · {formatDate(activeEvent.start_at)} –{" "}
+                {formatDate(activeEvent.end_at)}
+              </p>
+              {activeEvent.description && (
+                <p className="mt-2 text-sm text-ink-600">{activeEvent.description}</p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-xl bg-ink-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-400">
+                  Your application status
+                </p>
+                <Badge className="mt-1.5 border-ink-200 bg-white text-ink-700">
+                  {APPLICATION_STATUS_LABELS[activeApplicationToShow.status]}
+                </Badge>
+              </div>
+              {((activeRegistrationOpen &&
+                ["approved", "booth_selection_available"].includes(
+                  activeApplicationToShow.status
+                )) ||
+                activeApplicationToShow.status === "booth_selected") && (
+                  <Link
+                    href="/vendor/booths"
+                    className={buttonVariants({ variant: "primary", className: "shrink-0" })}
+                  >
+                    {activeApplicationToShow.status === "booth_selected" ? "View your booth" : "Select your booth"}
+                  </Link>
+                )}
+              {["awaiting_payment", "payment_under_review", "confirmed"].includes(
+                activeApplicationToShow.status
+              ) && (
+                <Link
+                  href="/vendor/payment"
+                  className={buttonVariants({ variant: "primary", className: "shrink-0" })}
+                >
+                  {activeApplicationToShow.status === "awaiting_payment" ? "Complete payment" : "View payment"}
+                </Link>
+              )}
+            </div>
+
+            {!activeRegistrationOpen &&
+              ["approved", "booth_selection_available"].includes(
+                activeApplicationToShow.status
+              ) && (
+                <Alert variant="info">
+                  Booth selection is not available outside the registration window. Contact Dar Al Hay if you need
+                  help with this application.
+                </Alert>
+              )}
+
+            {activeEvent.vendor_rules && (
+              <details className="group text-sm text-ink-600">
+                <summary className="cursor-pointer font-medium text-ink-800">Vendor rules</summary>
+                <p className="mt-2 whitespace-pre-line pl-4">{activeEvent.vendor_rules}</p>
+              </details>
+            )}
+            {activeEvent.setup_instructions && (
+              <details className="group text-sm text-ink-600">
+                <summary className="cursor-pointer font-medium text-ink-800">Setup instructions</summary>
+                <p className="mt-2 whitespace-pre-line pl-4">{activeEvent.setup_instructions}</p>
+              </details>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Current event</CardTitle>
+          <CardTitle>Open registration</CardTitle>
           <CardDescription>
-            {openEvent ? "Registration is open." : "Event registration opens once your business is approved."}
+            {openEvent ? "Registration is open." : "No event is accepting applications right now."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -233,14 +378,14 @@ export default async function VendorDashboardPage() {
                       </p>
                     )}
                   </div>
-                  {["approved", "booth_selected"].includes(currentApplication.status) && (
+                  {["approved", "booth_selection_available", "booth_selected"].includes(currentApplication.status) && (
                     <Link href="/vendor/booths" className={buttonVariants({ variant: "primary", className: "shrink-0" })}>
-                      {currentApplication.status === "approved" ? "Select your booth" : "View your booth"}
+                      {currentApplication.status === "booth_selected" ? "View your booth" : "Select your booth"}
                     </Link>
                   )}
                   {["awaiting_payment", "payment_under_review", "confirmed"].includes(currentApplication.status) && (
                     <Link href="/vendor/payment" className={buttonVariants({ variant: "primary", className: "shrink-0" })}>
-                      {currentApplication.status === "confirmed" ? "View payment" : "Complete payment"}
+                      {currentApplication.status === "awaiting_payment" ? "Complete payment" : "View payment"}
                     </Link>
                   )}
                 </div>

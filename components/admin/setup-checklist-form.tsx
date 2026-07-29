@@ -84,6 +84,7 @@ export function SetupChecklistForm({
   return (
     <form onSubmit={onSave} className="space-y-6" encType="multipart/form-data">
       <fieldset className="space-y-2">
+        <legend className="mb-3 text-sm font-semibold text-ink-900">Setup verification</legend>
         {CHECKLIST_ITEMS.map((item) => (
           <label key={item.key} className="flex items-center gap-2 text-sm text-ink-700">
             <input type="checkbox" name={item.key} defaultChecked={Boolean(checklist?.[item.key])} />
@@ -96,19 +97,19 @@ export function SetupChecklistForm({
         <label className="mb-1.5 block text-sm font-medium text-ink-800" htmlFor="issue_found">
           Issue found
         </label>
-        <Textarea id="issue_found" name="issue_found" rows={2} defaultValue={checklist?.issue_found ?? ""} />
+        <Textarea id="issue_found" name="issue_found" rows={2} maxLength={2000} defaultValue={checklist?.issue_found ?? ""} />
       </div>
 
       <div>
         <label className="mb-1.5 block text-sm font-medium text-ink-800" htmlFor="notes">
           Notes
         </label>
-        <Textarea id="notes" name="notes" rows={2} defaultValue={checklist?.notes ?? ""} />
+        <Textarea id="notes" name="notes" rows={2} maxLength={5000} defaultValue={checklist?.notes ?? ""} />
       </div>
 
       <div>
         <label className="mb-1.5 block text-sm font-medium text-ink-800" htmlFor="photo">
-          Photo
+          Photo <span className="font-normal text-ink-500">(PNG, JPEG, or WEBP, up to 5 MB)</span>
         </label>
         <FileInput id="photo" name="photo" accept="image/png,image/jpeg,image/webp" previewUrls={photoSignedUrl ? [photoSignedUrl] : []} />
       </div>
@@ -138,7 +139,20 @@ export function SetupChecklistForm({
         loading={isPending}
         onConfirm={onNeedsChanges}
       >
-        <Textarea autoFocus rows={3} value={issueText} onChange={(e) => setIssueText(e.target.value)} placeholder="Describe the issue…" />
+        <div>
+          <label htmlFor="needs-changes-issue" className="mb-1.5 block text-sm font-medium text-ink-800">
+            Issue requiring attention
+          </label>
+          <Textarea
+            id="needs-changes-issue"
+            autoFocus
+            required
+            rows={3}
+            maxLength={2000}
+            value={issueText}
+            onChange={(e) => setIssueText(e.target.value)}
+          />
+        </div>
       </ConfirmDialog>
     </form>
   );

@@ -46,7 +46,12 @@ export function CategoryRuleRow({
   function onDelete() {
     if (!rule) return;
     startTransition(async () => {
-      await deleteCategoryRuleAction(rule.id, eventId);
+      const result = await deleteCategoryRuleAction(rule.id, eventId);
+      if (!result.ok) {
+        toast({ title: "Couldn't clear rule", description: result.error, variant: "error" });
+        return;
+      }
+      toast({ title: `Rule cleared for ${category.name}`, variant: "success" });
       router.refresh();
     });
   }
@@ -64,8 +69,8 @@ export function CategoryRuleRow({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs text-ink-500">Preferred zone</label>
-          <Select name="preferredZoneId" defaultValue={rule?.preferred_zone_id ?? ""}>
+          <label htmlFor={`preferred-zone-${category.id}`} className="mb-1 block text-xs text-ink-500">Preferred zone</label>
+          <Select id={`preferred-zone-${category.id}`} name="preferredZoneId" defaultValue={rule?.preferred_zone_id ?? ""}>
             <option value="">No preference</option>
             {zones.map((z) => (
               <option key={z.id} value={z.id}>
@@ -75,13 +80,13 @@ export function CategoryRuleRow({
           </Select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-ink-500">Max booths per zone</label>
-          <Input name="maxPerZone" type="number" min={0} defaultValue={rule?.max_per_zone ?? ""} />
+          <label htmlFor={`max-per-zone-${category.id}`} className="mb-1 block text-xs text-ink-500">Max booths per zone</label>
+          <Input id={`max-per-zone-${category.id}`} name="maxPerZone" type="number" min={1} max={10000} step={1} defaultValue={rule?.max_per_zone ?? ""} />
         </div>
       </div>
 
       <div className="mt-3">
-        <label className="mb-1 block text-xs text-ink-500">Preferred features</label>
+        <p className="mb-1 text-xs text-ink-500">Preferred features</p>
         <div className="flex flex-wrap gap-2">
           {FEATURE_TAG_OPTIONS.map((tag) => (
             <label key={tag} className="flex items-center gap-1.5 text-xs text-ink-600">

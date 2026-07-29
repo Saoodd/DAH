@@ -24,13 +24,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
       <p className="mt-2 max-w-sm text-sm text-ink-500">
         Please try again. If this keeps happening, contact Dar Al Hay support.
       </p>
-      {process.env.NODE_ENV === "development" && (
-        <pre className="mt-4 max-w-lg overflow-x-auto rounded-xl border border-red-200 bg-red-50 p-3 text-left text-xs text-red-700">
-          {error.message}
-          {error.digest && `\n\ndigest: ${error.digest}`}
-        </pre>
-      )}
-      <button onClick={reset} className={buttonVariants({ variant: "primary", className: "mt-6" })}>
+      <button type="button" onClick={reset} className={buttonVariants({ variant: "primary", className: "mt-6" })}>
         Try again
       </button>
     </div>

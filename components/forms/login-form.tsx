@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { loginAction } from "@/app/auth/actions";
 import { applyServerFieldErrors } from "@/lib/form-errors";
+import { safeLocalRedirect } from "@/lib/local-redirect";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ export function LoginForm({ next }: { next?: string }) {
         setServerError(result.error);
         return;
       }
-      router.push(next && next.startsWith("/") ? next : "/vendor");
+      router.push(safeLocalRedirect(next));
       router.refresh();
     });
   }

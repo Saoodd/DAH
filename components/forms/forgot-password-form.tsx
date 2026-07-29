@@ -12,6 +12,7 @@ import { Alert } from "@/components/ui/alert";
 
 export function ForgotPasswordForm() {
   const [submitted, setSubmitted] = React.useState(false);
+  const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
   const {
@@ -24,7 +25,12 @@ export function ForgotPasswordForm() {
     const formData = new FormData();
     formData.set("email", values.email);
     startTransition(async () => {
-      await forgotPasswordAction(formData);
+      setServerError(null);
+      const result = await forgotPasswordAction(formData);
+      if (!result.ok) {
+        setServerError(result.error);
+        return;
+      }
       setSubmitted(true);
     });
   }
@@ -39,6 +45,9 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      {serverError ? (
+        <Alert variant="error">{serverError}</Alert>
+      ) : null}
       <Field label="Email address" htmlFor="email" error={errors.email?.message} required>
         <Input id="email" type="email" autoComplete="email" {...register("email")} aria-invalid={!!errors.email} />
       </Field>

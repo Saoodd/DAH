@@ -8,6 +8,25 @@ import { FloorPlan, type BoothWithRecommendation } from "@/components/vendor/flo
 import { WaitingListPanel } from "@/components/vendor/waiting-list-panel";
 import { getBoothRecommendation, getNearbyOccupants } from "@/lib/recommendations";
 import { APPLICATION_STATUS_LABELS } from "@/lib/constants";
+import { isEventActive, isEventRegistrationOpen } from "@/lib/event-registration";
+import type { Database } from "@/types/database";
+
+type BoothEvent = Pick<
+  Database["public"]["Tables"]["events"]["Row"],
+  | "id"
+  | "name"
+  | "booth_lock_minutes"
+  | "recommendations_enabled"
+  | "registration_status"
+  | "registration_opens_at"
+  | "registration_closes_at"
+  | "end_at"
+  | "is_archived"
+>;
+type BoothApplication = Pick<
+  Database["public"]["Tables"]["applications"]["Row"],
+  "id" | "status" | "booth_id" | "event_id"
+>;
 
 export const metadata: Metadata = { title: "Select Your Booth" };
 export const dynamic = "force-dynamic";
@@ -16,27 +35,60 @@ export default async function VendorBoothsPage() {
   const business = await requireOwnedBusiness();
   const supabase = await createClient();
 
-  const { data: event } = await supabase
+  let event: BoothEvent | null = null;
+  let application: BoothApplication | null = null;
+
+  const { data: activeBoothApplication } = await supabase
+    .from("applications")
+    .select("id, status, booth_id, event_id")
+    .eq("business_id", business.id)
+    .in("status", ["booth_selected", "awaiting_payment"])
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeBoothApplication) {
+    const { data: activeEvent } = await supabase
+      .from("events")
+      .select(
+        "id, name, booth_lock_minutes, recommendations_enabled, registration_status, registration_opens_at, registration_closes_at, end_at, is_archived"
+      )
+      .eq("id", activeBoothApplication.event_id)
+      .maybeSingle();
+
+    if (activeEvent && isEventActive(activeEvent)) {
+      event = activeEvent;
+      application = activeBoothApplication;
+    }
+  }
+
+  const { data: configuredOpenEvent } = await supabase
     .from("events")
-    .select("id, name, booth_lock_minutes, recommendations_enabled")
+    .select(
+      "id, name, booth_lock_minutes, recommendations_enabled, registration_status, registration_opens_at, registration_closes_at, end_at, is_archived"
+    )
     .eq("registration_status", "open")
     .maybeSingle();
+
+  if (!event && configuredOpenEvent && isEventRegistrationOpen(configuredOpenEvent)) {
+    event = configuredOpenEvent;
+    const { data: openEventApplication } = await supabase
+      .from("applications")
+      .select("id, status, booth_id, event_id")
+      .eq("event_id", event.id)
+      .eq("business_id", business.id)
+      .maybeSingle();
+    application = openEventApplication;
+  }
 
   if (!event) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-ink-950">Select your booth</h1>
-        <Alert variant="info">There is no open event right now.</Alert>
+        <Alert variant="info">Booth selection is not currently available.</Alert>
       </div>
     );
   }
-
-  const { data: application } = await supabase
-    .from("applications")
-    .select("id, status, booth_id")
-    .eq("event_id", event.id)
-    .eq("business_id", business.id)
-    .maybeSingle();
 
   if (!application || !["approved", "booth_selected", "awaiting_payment"].includes(application.status)) {
     return (
@@ -44,7 +96,7 @@ export default async function VendorBoothsPage() {
         <h1 className="text-2xl font-semibold text-ink-950">Select your booth</h1>
         <Alert variant="info">
           {!application
-            ? "Apply to the open event from your dashboard first."
+            ? "Apply to this event from your dashboard first."
             : `Your application is ${APPLICATION_STATUS_LABELS[application.status]?.toLowerCase() ?? application.status}. Booth selection opens once it's approved.`}
         </Alert>
         <Link href="/vendor" className="text-sm font-medium text-brand-600 hover:text-brand-700">

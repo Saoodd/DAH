@@ -29,7 +29,7 @@ export function VendorsTable({ businesses }: { businesses: VendorRow[] }) {
   const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
 
-  const selectableIds = businesses.filter((b) => b.approval_status !== "approved").map((b) => b.id);
+  const selectableIds = businesses.filter((b) => b.approval_status === "pending_review").map((b) => b.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
 
   function toggleAll() {
@@ -96,7 +96,7 @@ export function VendorsTable({ businesses }: { businesses: VendorRow[] }) {
             {businesses.map((b) => (
               <tr key={b.id} className="hover:bg-ink-50">
                 <td className="px-6 py-4">
-                  {b.approval_status !== "approved" && (
+                  {b.approval_status === "pending_review" && (
                     <input
                       type="checkbox"
                       checked={selected.has(b.id)}

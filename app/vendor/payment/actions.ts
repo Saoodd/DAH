@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireVendor } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
-import { sendNotification } from "@/lib/notifications";
-import { uploadOwnedFile } from "@/lib/storage";
+import { sendTrustedNotification } from "@/lib/notifications";
+import { removeSupersededOwnedFile, uploadOwnedFile } from "@/lib/storage";
 import { bankTransferSchema, adcbReferenceSchema, MAX_RECEIPT_SIZE_BYTES, ACCEPTED_RECEIPT_TYPES } from "@/lib/validations/payment";
 import type { ActionResult } from "@/app/auth/actions";
 
@@ -92,7 +93,12 @@ export async function submitBankTransferReceiptAction(paymentId: string, formDat
     return fail("Unsupported file format.", { receipt: ["Use PNG, JPEG, WEBP, or PDF."] });
   }
 
-  const path = await uploadOwnedFile(supabase, "payment-receipts", authUser.id, receipt);
+  let path: string;
+  try {
+    path = await uploadOwnedFile(supabase, "payment-receipts", authUser.id, receipt);
+  } catch {
+    return fail("Could not upload your receipt. Please try again.");
+  }
 
   const { error } = await supabase.rpc("submit_bank_transfer_receipt", {
     p_payment_id: paymentId,
@@ -100,7 +106,35 @@ export async function submitBankTransferReceiptAction(paymentId: string, formDat
     p_transfer_reference: parsed.data.transferReference,
     p_transfer_date: parsed.data.transferDate,
   });
-  if (error) return fail("Could not save your receipt.");
+  if (error) {
+    try {
+      const { error: cleanupError } = await createAdminClient()
+        .storage
+        .from("payment-receipts")
+        .remove([path]);
+      if (cleanupError) {
+        console.error("Payment receipt cleanup failed.", cleanupError.message);
+      }
+
+    } catch {
+      console.error("Payment receipt cleanup failed.");
+    }
+    return fail("Could not save your receipt.");
+  }
+
+  if (payment.receipt_url) {
+    try {
+      await removeSupersededOwnedFile(
+        createAdminClient(),
+        "payment-receipts",
+        payment.receipt_url,
+        path,
+        authUser.id
+      );
+    } catch {
+      console.error("Superseded payment receipt cleanup failed.");
+    }
+  }
 
   await logAudit(supabase, {
     actorId: authUser.id,
@@ -111,7 +145,7 @@ export async function submitBankTransferReceiptAction(paymentId: string, formDat
     newValue: { method: "bank_transfer", transfer_reference: parsed.data.transferReference },
   });
 
-  await sendNotification(supabase, { businessId: business.id, templateKey: "receipt_received" });
+  await sendTrustedNotification({ businessId: business.id, templateKey: "receipt_received" });
 
   revalidatePath("/vendor/payment");
   revalidatePath("/vendor");

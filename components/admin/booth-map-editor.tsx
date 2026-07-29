@@ -16,6 +16,7 @@ import {
 } from "@/app/admin/events/[id]/booths/actions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
@@ -30,15 +31,22 @@ type MapFeature = Database["public"]["Tables"]["map_features"]["Row"];
 type Category = { id: string; name: string };
 
 const STATUS_FILL: Record<string, string> = {
-  available: "#10b981",
-  locked: "#f59e0b",
-  reserved: "#3b82f6",
-  awaiting_payment: "#f97316",
-  confirmed: "#7c3aed",
-  admin_held: "#64748b",
-  blocked: "#dc2626",
-  unavailable: "#a3a3a3",
+  available: "#047857",
+  locked: "#92400e",
+  reserved: "#1d4ed8",
+  awaiting_payment: "#c2410c",
+  confirmed: "#6d28d9",
+  admin_held: "#334155",
+  blocked: "#b91c1c",
+  unavailable: "#525252",
 };
+
+const KEYBOARD_DELTAS = {
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+} as const;
 
 interface BoothMapEditorProps {
   eventId: string;
@@ -59,6 +67,8 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
   const [zoneFormOpen, setZoneFormOpen] = React.useState(false);
   const [featureFormOpen, setFeatureFormOpen] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
+  const mapTitleId = React.useId();
+  const mapInstructionsId = React.useId();
 
   const selectedBooth = localBooths.find((b) => b.id === selectedBoothId) ?? null;
 
@@ -125,6 +135,88 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
     }
   }
 
+  function persistBoothPosition(booth: Booth) {
+    startTransition(async () => {
+      const result = await updateBoothPositionAction(booth.id, eventId, {
+        mapX: booth.map_x,
+        mapY: booth.map_y,
+        mapWidth: booth.map_width,
+        mapHeight: booth.map_height,
+      });
+      if (!result.ok) {
+        toast({ title: "Couldn't update booth position", description: result.error, variant: "error" });
+      }
+    });
+  }
+
+  function persistFeaturePosition(feature: MapFeature) {
+    startTransition(async () => {
+      const result = await updateMapFeaturePositionAction(feature.id, eventId, {
+        mapX: feature.map_x,
+        mapY: feature.map_y,
+      });
+      if (!result.ok) {
+        toast({ title: "Couldn't update map feature", description: result.error, variant: "error" });
+      }
+    });
+  }
+
+  function handleBoothKeyDown(e: React.KeyboardEvent<SVGRectElement>, booth: Booth) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setSelectedBoothId(booth.id);
+      return;
+    }
+
+    const delta = KEYBOARD_DELTAS[e.key as keyof typeof KEYBOARD_DELTAS];
+    if (!delta) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedBoothId(booth.id);
+
+    const nextBooth: Booth = e.shiftKey
+      ? {
+          ...booth,
+          map_width: clamp(booth.map_width + delta.x, 3, 100 - booth.map_x),
+          map_height: clamp(booth.map_height + delta.y, 3, 100 - booth.map_y),
+        }
+      : {
+          ...booth,
+          map_x: clamp(booth.map_x + delta.x, 0, 100 - booth.map_width),
+          map_y: clamp(booth.map_y + delta.y, 0, 100 - booth.map_height),
+        };
+
+    setLocalBooths((current) => current.map((item) => (item.id === booth.id ? nextBooth : item)));
+  }
+
+  function handleBoothKeyUp(e: React.KeyboardEvent<SVGRectElement>, booth: Booth) {
+    if (KEYBOARD_DELTAS[e.key as keyof typeof KEYBOARD_DELTAS]) {
+      persistBoothPosition(booth);
+    }
+  }
+
+  function handleFeatureKeyDown(e: React.KeyboardEvent<SVGGElement>, feature: MapFeature) {
+    const delta = KEYBOARD_DELTAS[e.key as keyof typeof KEYBOARD_DELTAS];
+    if (!delta) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const nextFeature: MapFeature = {
+      ...feature,
+      map_x: clamp(feature.map_x + delta.x, 0, 100 - feature.map_width),
+      map_y: clamp(feature.map_y + delta.y, 0, 100 - feature.map_height),
+    };
+    setLocalFeatures((current) => current.map((item) => (item.id === feature.id ? nextFeature : item)));
+  }
+
+  function handleFeatureKeyUp(e: React.KeyboardEvent<SVGGElement>, feature: MapFeature) {
+    if (KEYBOARD_DELTAS[e.key as keyof typeof KEYBOARD_DELTAS]) {
+      persistFeaturePosition(feature);
+    }
+  }
+
   function onPointerUp() {
     if (!dragState) return;
     const { id, kind } = dragState;
@@ -133,20 +225,11 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
     if (kind === "booth") {
       const booth = localBooths.find((b) => b.id === id);
       if (!booth) return;
-      startTransition(async () => {
-        await updateBoothPositionAction(id, eventId, {
-          mapX: booth.map_x,
-          mapY: booth.map_y,
-          mapWidth: booth.map_width,
-          mapHeight: booth.map_height,
-        });
-      });
+      persistBoothPosition(booth);
     } else {
       const feature = localFeatures.find((f) => f.id === id);
       if (!feature) return;
-      startTransition(async () => {
-        await updateMapFeaturePositionAction(id, eventId, { mapX: feature.map_x, mapY: feature.map_y });
-      });
+      persistFeaturePosition(feature);
     }
   }
 
@@ -204,41 +287,74 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleAddBooth} loading={isPending}>
+          <Button type="button" size="sm" onClick={handleAddBooth} loading={isPending}>
             Add booth
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setZoneFormOpen(true)}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setZoneFormOpen(true)}>
             Add zone
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setFeatureFormOpen(true)}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setFeatureFormOpen(true)}>
             Add map feature
           </Button>
-          <Button size="sm" variant="ghost" onClick={handleReleaseExpired}>
+          <Button type="button" size="sm" variant="ghost" onClick={handleReleaseExpired}>
             Release expired locks
           </Button>
         </div>
 
         <div className="rounded-2xl border border-ink-100 bg-ink-50/40 p-3">
+          <p id={mapInstructionsId} className="mb-3 text-xs leading-5 text-ink-600">
+            Keyboard: focus a booth and press Enter to select it. Use the arrow keys to move it, or Shift + arrow
+            keys to resize it. Focus a map feature and use the arrow keys to move it.
+          </p>
           <svg
             ref={svgRef}
             viewBox="0 0 100 100"
+            role="group"
+            aria-labelledby={mapTitleId}
+            aria-describedby={mapInstructionsId}
             className="aspect-square w-full touch-none rounded-xl bg-white shadow-inner"
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
           >
+            <title id={mapTitleId}>Interactive booth map editor</title>
             {localFeatures.map((f) => (
-              <g key={f.id} onPointerDown={(e) => startDrag(e, f.id, "feature", "move", { x: f.map_x, y: f.map_y, w: f.map_width, h: f.map_height })}>
+              <g
+                key={f.id}
+                role="group"
+                tabIndex={0}
+                aria-label={`${f.label || MAP_FEATURE_LABELS[f.type]} map feature. Use arrow keys to move.`}
+                aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
+                className="group outline-none"
+                onKeyDown={(e) => handleFeatureKeyDown(e, f)}
+                onKeyUp={(e) => handleFeatureKeyUp(e, f)}
+                onPointerDown={(e) =>
+                  startDrag(e, f.id, "feature", "move", {
+                    x: f.map_x,
+                    y: f.map_y,
+                    w: f.map_width,
+                    h: f.map_height,
+                  })
+                }
+              >
                 <rect
                   x={f.map_x}
                   y={f.map_y}
                   width={f.map_width}
                   height={f.map_height}
                   rx={1}
-                  className="cursor-move fill-ink-200 stroke-ink-400"
+                  className="cursor-move fill-ink-200 stroke-ink-400 group-focus-visible:stroke-brand-700 group-focus-visible:stroke-[0.9]"
                   strokeWidth={0.3}
                   strokeDasharray="1,1"
                 />
-                <text x={f.map_x + f.map_width / 2} y={f.map_y + f.map_height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={2.2} className="fill-ink-600 select-none">
+                <text
+                  x={f.map_x + f.map_width / 2}
+                  y={f.map_y + f.map_height / 2}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={2.2}
+                  className="fill-ink-600 select-none"
+                  aria-hidden="true"
+                >
                   {f.label || MAP_FEATURE_LABELS[f.type]}
                 </text>
               </g>
@@ -249,6 +365,10 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
               return (
                 <g key={b.id}>
                   <rect
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Booth ${b.booth_number}, ${b.status.replace(/_/g, " ")}.${selectedBoothId === b.id ? " Selected." : ""} Press Enter to select. Use arrow keys to move, or Shift + arrow keys to resize.`}
+                    aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"
                     x={b.map_x}
                     y={b.map_y}
                     width={b.map_width}
@@ -257,8 +377,17 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
                     fill={STATUS_FILL[b.status]}
                     stroke={selectedBoothId === b.id ? "#171514" : zone?.color ?? "#ffffff"}
                     strokeWidth={selectedBoothId === b.id ? 0.8 : 0.4}
-                    className="cursor-move"
-                    onPointerDown={(e) => startDrag(e, b.id, "booth", "move", { x: b.map_x, y: b.map_y, w: b.map_width, h: b.map_height })}
+                    className="cursor-move outline-none focus-visible:stroke-brand-700 focus-visible:stroke-[1.2]"
+                    onKeyDown={(e) => handleBoothKeyDown(e, b)}
+                    onKeyUp={(e) => handleBoothKeyUp(e, b)}
+                    onPointerDown={(e) =>
+                      startDrag(e, b.id, "booth", "move", {
+                        x: b.map_x,
+                        y: b.map_y,
+                        w: b.map_width,
+                        h: b.map_height,
+                      })
+                    }
                   />
                   <text
                     x={b.map_x + b.map_width / 2}
@@ -267,6 +396,7 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
                     dominantBaseline="middle"
                     fontSize={2.4}
                     className="pointer-events-none select-none fill-white font-medium"
+                    aria-hidden="true"
                   >
                     {b.booth_number}
                   </text>
@@ -276,7 +406,15 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
                     width={2.2}
                     height={2.2}
                     className="cursor-nwse-resize fill-ink-900/70"
-                    onPointerDown={(e) => startDrag(e, b.id, "booth", "resize", { x: b.map_x, y: b.map_y, w: b.map_width, h: b.map_height })}
+                    aria-hidden="true"
+                    onPointerDown={(e) =>
+                      startDrag(e, b.id, "booth", "resize", {
+                        x: b.map_x,
+                        y: b.map_y,
+                        w: b.map_width,
+                        h: b.map_height,
+                      })
+                    }
                   />
                 </g>
               );
@@ -287,7 +425,7 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
         <div className="flex flex-wrap gap-3 text-xs text-ink-600">
           {Object.entries(STATUS_FILL).map(([status, color]) => (
             <span key={status} className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} />
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} aria-hidden="true" />
               {status.replace(/_/g, " ")}
             </span>
           ))}
@@ -297,11 +435,11 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
           <div className="flex flex-wrap gap-2">
             {zones.map((z) => (
               <span key={z.id} className="flex items-center gap-1.5 rounded-full border border-ink-200 px-2.5 py-1 text-xs text-ink-600">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: z.color }} />
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: z.color }} aria-hidden="true" />
                 {z.name}
                 <button
                   type="button"
-                  className="ml-1 text-ink-300 hover:text-red-600"
+                  className="ml-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-ink-500 hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-red-700"
                   onClick={() =>
                     startTransition(async () => {
                       await deleteZoneAction(z.id, eventId);
@@ -324,14 +462,14 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
                 {f.label || MAP_FEATURE_LABELS[f.type]}
                 <button
                   type="button"
-                  className="ml-1 text-ink-300 hover:text-red-600"
+                  className="ml-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-ink-500 hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-red-700"
                   onClick={() =>
                     startTransition(async () => {
                       await deleteMapFeatureAction(f.id, eventId);
                       router.refresh();
                     })
                   }
-                  aria-label="Delete feature"
+                  aria-label={`Delete map feature ${f.label || MAP_FEATURE_LABELS[f.type]}`}
                 >
                   ×
                 </button>
@@ -387,8 +525,12 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
             });
           }}
         >
-          <Input name="name" placeholder="Zone name, e.g. Fashion Zone" required />
-          <Input name="color" type="color" defaultValue="#b8873c" className="h-11 w-20 p-1" />
+          <Field label="Zone name" htmlFor="zone-name" required>
+            <Input id="zone-name" name="name" maxLength={80} placeholder="e.g. Fashion Zone" required />
+          </Field>
+          <Field label="Zone color" htmlFor="zone-color">
+            <Input name="color" type="color" defaultValue="#b8873c" className="h-11 w-20 p-1" />
+          </Field>
         </form>
       </ConfirmDialog>
 
@@ -419,14 +561,18 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
             });
           }}
         >
-          <Select name="type" defaultValue="entrance">
-            {Object.entries(MAP_FEATURE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-          <Input name="label" placeholder="Label (optional)" />
+          <Field label="Feature type" htmlFor="map-feature-type" required>
+            <Select id="map-feature-type" name="type" defaultValue="entrance">
+              {Object.entries(MAP_FEATURE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Custom label" htmlFor="map-feature-label" hint="Optional">
+            <Input id="map-feature-label" name="label" maxLength={80} placeholder="e.g. Main entrance" />
+          </Field>
         </form>
       </ConfirmDialog>
     </div>

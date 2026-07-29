@@ -8,7 +8,7 @@ const variantClasses: Record<Variant, string> = {
   primary:
     "bg-ink-900 text-white shadow-sm hover:bg-ink-800 hover:shadow-md active:bg-ink-950 focus-visible:outline-ink-900 disabled:bg-ink-200 disabled:text-ink-400 disabled:shadow-none",
   secondary:
-    "bg-brand-500 text-white shadow-[var(--shadow-brand)] hover:bg-brand-600 active:bg-brand-700 focus-visible:outline-brand-500 disabled:bg-brand-100 disabled:text-brand-300 disabled:shadow-none",
+    "bg-brand-700 text-white shadow-[var(--shadow-brand)] hover:bg-brand-800 active:bg-brand-900 focus-visible:outline-brand-700 disabled:bg-brand-100 disabled:text-brand-400 disabled:shadow-none",
   outline:
     "border border-ink-200 bg-white text-ink-900 shadow-xs hover:border-ink-300 hover:bg-ink-50 active:bg-ink-100 focus-visible:outline-ink-900 disabled:border-ink-100 disabled:text-ink-300 disabled:shadow-none",
   ghost:
@@ -33,9 +33,10 @@ export function buttonVariants({
   className?: string;
 } = {}) {
   return cn(
-    "inline-flex select-none items-center justify-center whitespace-nowrap font-medium transition-all duration-150 ease-out",
+    "inline-flex select-none items-center justify-center whitespace-nowrap font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out",
     "active:scale-[0.98]",
     "disabled:cursor-not-allowed disabled:active:scale-100",
+    "motion-reduce:transition-none motion-reduce:active:scale-100",
     "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
     variantClasses[variant],
     sizeClasses[size],
@@ -60,7 +61,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading && (
-          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg className="h-4 w-4 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
           </svg>

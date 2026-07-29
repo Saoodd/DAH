@@ -75,7 +75,7 @@ export function VendorActions({ businessId, status }: { businessId: string; stat
     runAction(action(businessId, reason), `Vendor ${reasonDialog === "reject" ? "rejected" : reasonDialog === "suspend" ? "suspended" : "blacklisted"}.`);
   }
 
-  const canApprove = status !== "approved";
+  const canApprove = status === "pending_review";
   const canReject = status === "pending_review";
   const canSuspend = status === "approved";
   const canBlacklist = status !== "blacklisted";
@@ -142,6 +142,7 @@ export function VendorActions({ businessId, status }: { businessId: string; stat
         <Textarea
           autoFocus
           rows={3}
+          maxLength={2000}
           placeholder="Explain why — the vendor will see this."
           value={reason}
           onChange={(e) => setReason(e.target.value)}
