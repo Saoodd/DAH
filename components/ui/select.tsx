@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
@@ -19,14 +20,12 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
       >
         {children}
       </select>
-      <svg
-        className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400"
-        viewBox="0 0 20 20"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path d="M5.5 7.5L10 12l4.5-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <Icon
+        name="chevron-down"
+        size="sm"
+        strokeWidth={1.5}
+        className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-400"
+      />
     </div>
   )
 );

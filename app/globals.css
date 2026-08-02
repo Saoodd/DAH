@@ -1,5 +1,36 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Design foundation — Dar Al Hay Events
+
+   Typography
+   - Body/UI text: Geist (`font-sans`, the default) — highly legible at small
+     sizes. Use the type-scale tokens below (`text-body`, `text-body-sm`,
+     `text-caption`) instead of ad-hoc size + leading combos.
+   - Display/headings: Fraunces (`font-display`) — an optically-sized serif
+     reserved for page titles, hero copy, and large numerals. Pair it with the
+     `text-display`, `text-display-sm`, or `text-h1`–`text-h4` tokens, which
+     bake in the correct line-height, letter-spacing, and weight. Small UI
+     headings (card titles, table headers) stay in Geist.
+
+   Spacing rhythm (Tailwind's default 4px scale — do not invent new values)
+   - Page sections: `space-y-8` (admin) / `space-y-6` (denser vendor views).
+   - Card internals: `px-6 py-5` content, `px-6 py-4` header/footer.
+   - Form stacks: `space-y-5` between fields, `gap-3` between inline actions.
+   - Icon-to-label gaps: `gap-2` (sm) / `gap-3` (md).
+
+   Motion
+   - Tokens: `animate-in` (fade), `animate-scale-in` (dialogs/popovers),
+     `animate-slide-up` (toasts/alerts), `animate-page-enter` (route-level
+     content), `animate-shimmer` (skeletons).
+   - Utilities: `.page-enter` on a route's top-level wrapper for a soft
+     fade/rise on navigation; `.stagger-children` on a list/grid container to
+     cascade its children in (children must not set their own `animation`);
+     `.hover-lift` for cards/tiles that respond to hover.
+   - Everything respects `prefers-reduced-motion` via the global override
+     below — never add motion that bypasses it.
+--------------------------------------------------------------------------- */
+
 :root {
   color-scheme: light;
   --background: #faf9f6;
@@ -37,11 +68,56 @@
   --shadow-brand: 0 8px 20px -6px rgb(179 132 58 / 0.35);
 }
 
+/* Type scale — each token carries its size, line-height, letter-spacing, and
+   (for headings) weight, so `text-h2` alone is a complete heading style. */
+@theme {
+  --text-display: 3.75rem;
+  --text-display--line-height: 1.03;
+  --text-display--letter-spacing: -0.026em;
+  --text-display--font-weight: 600;
+
+  --text-display-sm: 3rem;
+  --text-display-sm--line-height: 1.08;
+  --text-display-sm--letter-spacing: -0.023em;
+  --text-display-sm--font-weight: 600;
+
+  --text-h1: 2.25rem;
+  --text-h1--line-height: 1.15;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h1--font-weight: 600;
+
+  --text-h2: 1.75rem;
+  --text-h2--line-height: 1.22;
+  --text-h2--letter-spacing: -0.017em;
+  --text-h2--font-weight: 600;
+
+  --text-h3: 1.375rem;
+  --text-h3--line-height: 1.3;
+  --text-h3--letter-spacing: -0.012em;
+  --text-h3--font-weight: 600;
+
+  --text-h4: 1.125rem;
+  --text-h4--line-height: 1.4;
+  --text-h4--letter-spacing: -0.008em;
+  --text-h4--font-weight: 600;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.6;
+
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.55;
+
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.45;
+  --text-caption--letter-spacing: 0.015em;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
 
   --color-brand-50: var(--color-brand-50);
   --color-brand-100: var(--color-brand-100);
@@ -76,6 +152,8 @@
   --animate-in: fade-in 0.15s ease-out;
   --animate-scale-in: scale-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slide-up: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-page-enter: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-stagger: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-shimmer: shimmer 1.8s ease-in-out infinite;
 }
 
@@ -101,6 +179,16 @@
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -137,6 +225,7 @@ body {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
@@ -159,5 +248,59 @@ body {
     );
     background-size: 400% 100%;
     animation: var(--animate-shimmer);
+  }
+
+  /* Route-level entrance: apply to a page's top-level wrapper. */
+  .page-enter {
+    animation: var(--animate-page-enter);
+  }
+
+  /* Cascade a container's direct children in (lists, grids, stat rows).
+     Children must not declare their own `animation`. Delay caps at 8 items
+     so long lists never feel slow. */
+  .stagger-children > * {
+    animation: var(--animate-stagger);
+  }
+  .stagger-children > :nth-child(2) {
+    animation-delay: 50ms;
+  }
+  .stagger-children > :nth-child(3) {
+    animation-delay: 100ms;
+  }
+  .stagger-children > :nth-child(4) {
+    animation-delay: 150ms;
+  }
+  .stagger-children > :nth-child(5) {
+    animation-delay: 200ms;
+  }
+  .stagger-children > :nth-child(6) {
+    animation-delay: 250ms;
+  }
+  .stagger-children > :nth-child(7) {
+    animation-delay: 300ms;
+  }
+  .stagger-children > :nth-child(n + 8) {
+    animation-delay: 350ms;
+  }
+
+  /* Subtle lift for interactive cards/tiles. */
+  .hover-lift {
+    transition:
+      transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 0.2s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .hover-lift:active {
+    transform: translateY(0);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hover-lift:hover,
+    .hover-lift:active {
+      transform: none;
+    }
   }
 }

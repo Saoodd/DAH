@@ -1,11 +1,19 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export function Card({
+  className,
+  interactive,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
+  /** Opt-in hover lift for cards that act as links or targets. */
+  interactive?: boolean;
+}) {
   return (
     <div
       className={cn(
         "rounded-2xl border border-ink-100 bg-white shadow-sm transition-shadow duration-200",
+        interactive && "hover-lift hover:border-ink-200",
         className
       )}
       {...props}

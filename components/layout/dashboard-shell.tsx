@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 import { logoutAction } from "@/app/auth/actions";
 import { SITE_NAME } from "@/lib/constants";
 
@@ -112,7 +113,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
                 type="submit"
                 className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-600 hover:bg-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
               >
-                <LogoutIcon />
+                <Icon name="logout" size="sm" />
                 Log out
               </button>
             </form>
@@ -135,7 +136,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
             onClick={() => setMobileOpen(true)}
             className="flex h-10 w-10 items-center justify-center rounded-lg text-ink-700 hover:bg-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
           >
-            <MenuIcon />
+            <Icon name="menu" />
           </button>
         </header>
 
@@ -157,7 +158,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
                   onClick={() => setMobileOpen(false)}
                   className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
                 >
-                  <CloseIcon />
+                  <Icon name="close" />
                 </button>
               </div>
               <div className="flex flex-1 flex-col justify-between py-4">
@@ -169,7 +170,7 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
                       type="submit"
                       className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-600 hover:bg-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
                     >
-                      <LogoutIcon />
+                      <Icon name="logout" size="sm" />
                       Log out
                     </button>
                   </form>
@@ -184,34 +185,5 @@ export function DashboardShell({ navItems, roleLabel, identityLabel, children }:
         </main>
       </div>
     </div>
-  );
-}
-
-function MenuIcon() {
-  return (
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  );
-}
-
-function LogoutIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.75}
-        d="M8.25 9V5.25A2.25 2.25 0 0110.5 3h6a2.25 2.25 0 012.25 2.25v13.5A2.25 2.25 0 0116.5 21h-6a2.25 2.25 0 01-2.25-2.25V15M3 12h13.5m0 0l-3.75-3.75M16.5 12l-3.75 3.75"
-      />
-    </svg>
   );
 }

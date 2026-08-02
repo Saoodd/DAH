@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 type ToastVariant = "info" | "success" | "warning" | "error";
@@ -75,9 +76,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               aria-label="Dismiss notification"
               className="shrink-0 rounded-md p-1 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
             >
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-                <path strokeLinecap="round" d="M5 5l10 10M15 5L5 15" />
-              </svg>
+              <Icon name="close" size="sm" strokeWidth={1.5} />
             </button>
           </div>
         ))}
