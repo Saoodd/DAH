@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { VendorsTable } from "@/components/admin/vendors-table";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
+import { Icon } from "@/components/ui/icon";
 import { Pagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 import { APPROVAL_STATUS_LABELS } from "@/lib/constants";
@@ -58,14 +59,17 @@ export default async function AdminVendorsPage({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-ink-950">Vendors</h1>
-        <p className="mt-1 text-sm text-ink-500">All registered businesses.</p>
+        <p className="text-caption font-semibold uppercase tracking-[0.14em] text-brand-700">Admin console</p>
+        <h1 className="mt-2 font-display text-h2 text-ink-950 sm:text-h1">Vendors</h1>
+        <p className="mt-2 text-sm text-ink-500">
+          All registered businesses{typeof count === "number" ? ` · ${count.toLocaleString("en-US")} matching` : ""}.
+        </p>
       </div>
 
-      <form className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
+      <form className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by approval status">
           {STATUS_FILTERS.map((s) => (
             <Link
               key={s}
@@ -73,9 +77,12 @@ export default async function AdminVendorsPage({
                 pathname: "/admin/vendors",
                 query: { ...(s !== "all" ? { status: s } : {}), ...(search ? { q: search } : {}) },
               }}
+              aria-current={status === s ? "true" : undefined}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium",
-                status === s ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 text-ink-600 hover:bg-ink-50"
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
+                status === s
+                  ? "border-ink-950 bg-ink-950 text-white shadow-sm"
+                  : "border-ink-200 bg-white text-ink-600 hover:border-ink-300 hover:bg-ink-50 hover:text-ink-900"
               )}
             >
               {s === "all" ? "All" : APPROVAL_STATUS_LABELS[s]}
@@ -84,7 +91,22 @@ export default async function AdminVendorsPage({
         </div>
         <div className="flex gap-2">
           {status !== "all" && <input type="hidden" name="status" value={status} />}
-          <Input name="q" defaultValue={search} maxLength={100} placeholder="Search name, owner, email…" className="sm:w-64" />
+          <div className="relative w-full sm:w-72">
+            <Icon
+              name="search"
+              size="sm"
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400"
+            />
+            <Input
+              name="q"
+              type="search"
+              defaultValue={search}
+              maxLength={100}
+              placeholder="Search name, owner, email…"
+              aria-label="Search vendors by name, owner, or email"
+              className="pl-10"
+            />
+          </div>
         </div>
       </form>
 

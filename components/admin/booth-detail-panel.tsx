@@ -24,6 +24,7 @@ import { useToast } from "@/components/ui/toast";
 import { BOOTH_STATUS_BADGE_COLORS, BOOTH_STATUS_LABELS, FEATURE_TAG_LABELS } from "@/lib/constants";
 import { FEATURE_TAG_OPTIONS } from "@/lib/validations/booth";
 import { formatAED, formatDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Database } from "@/types/database";
 
 type Booth = Database["public"]["Tables"]["booths"]["Row"];
@@ -97,13 +98,15 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
     !booth.current_application_id && ["available", "admin_held"].includes(booth.status);
 
   return (
-    <div className="sticky top-6 rounded-2xl border border-ink-100 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
+    <div className="sticky top-6 rounded-2xl border border-ink-100 bg-white shadow-md">
+      <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-4 py-3.5">
         <div>
-          <p className="font-semibold text-ink-900">Booth {booth.booth_number}</p>
-          <Badge className={BOOTH_STATUS_BADGE_COLORS[booth.status]}>{BOOTH_STATUS_LABELS[booth.status]}</Badge>
+          <p className="font-display text-h4 text-ink-950">Booth {booth.booth_number}</p>
+          <Badge className={cn("mt-1.5", BOOTH_STATUS_BADGE_COLORS[booth.status])}>
+            {BOOTH_STATUS_LABELS[booth.status]}
+          </Badge>
         </div>
-        <div className="flex gap-1">
+        <div className="flex shrink-0 gap-1.5">
           <Button size="sm" variant="outline" onClick={onDuplicate}>
             Duplicate
           </Button>
@@ -113,17 +116,24 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
         </div>
       </div>
 
-      <div className="flex border-b border-ink-100 text-xs font-medium">
-        {(["details", "status", "history"] as const).map((t) => (
-          <button
-            type="button"
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 px-3 py-2 capitalize ${tab === t ? "border-b-2 border-ink-900 text-ink-900" : "text-ink-400"}`}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="border-b border-ink-100 px-4 py-2.5">
+        <div className="flex gap-1 rounded-lg bg-ink-50 p-1 text-xs font-medium">
+          {(["details", "status", "history"] as const).map((t) => (
+            <button
+              type="button"
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "flex-1 rounded-md px-3 py-1.5 capitalize transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-700",
+                tab === t
+                  ? "bg-white font-semibold text-ink-950 shadow-xs"
+                  : "text-ink-500 hover:text-ink-800"
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="max-h-[70vh] overflow-y-auto p-4">
@@ -153,8 +163,11 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
                 defaultValue={booth.price_before_vat}
               />
             </Field>
-            <p className="text-xs text-ink-400">
-              VAT (5%): {formatAED(vat)} · Total: {formatAED(booth.price_before_vat + vat)}
+            <p className="flex items-center justify-between rounded-lg bg-ink-50/70 px-3 py-2 text-caption text-ink-500">
+              <span>VAT (5%): {formatAED(vat)}</span>
+              <span className="font-semibold tabular-nums text-ink-800">
+                Total {formatAED(booth.price_before_vat + vat)}
+              </span>
             </p>
             <Field label="Zone" htmlFor="zoneId">
               <Select id="zoneId" name="zoneId" defaultValue={booth.zone_id ?? ""}>
@@ -177,11 +190,20 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
               />
             </Field>
             <fieldset>
-              <legend className="mb-1.5 text-sm font-medium text-ink-800">Feature tags</legend>
-              <div className="flex flex-wrap gap-2">
+              <legend className="mb-2 text-sm font-medium text-ink-800">Feature tags</legend>
+              <div className="flex flex-wrap gap-1.5">
                 {FEATURE_TAG_OPTIONS.map((tag) => (
-                  <label key={tag} className="flex items-center gap-1.5 text-xs text-ink-600">
-                    <input type="checkbox" name="featureTags" value={tag} defaultChecked={booth.feature_tags.includes(tag)} />
+                  <label
+                    key={tag}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-full border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-medium text-ink-600 shadow-xs transition-colors hover:border-ink-300 has-checked:border-brand-300 has-checked:bg-brand-50 has-checked:text-brand-800"
+                  >
+                    <input
+                      type="checkbox"
+                      name="featureTags"
+                      value={tag}
+                      defaultChecked={booth.feature_tags.includes(tag)}
+                      className="h-3.5 w-3.5 rounded border-ink-300 accent-brand-700"
+                    />
                     {FEATURE_TAG_LABELS[tag]}
                   </label>
                 ))}
@@ -189,15 +211,19 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
             </fieldset>
             <fieldset>
               <legend className="mb-1.5 text-sm font-medium text-ink-800">Suitable categories (optional)</legend>
-              <p className="mb-1.5 text-xs text-ink-400">Leave empty to allow any category. Setting any warns other categories.</p>
-              <div className="flex flex-wrap gap-2">
+              <p className="mb-2 text-caption text-ink-400">Leave empty to allow any category. Setting any warns other categories.</p>
+              <div className="flex flex-wrap gap-1.5">
                 {categories.map((c) => (
-                  <label key={c.id} className="flex items-center gap-1.5 text-xs text-ink-600">
+                  <label
+                    key={c.id}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-full border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-medium text-ink-600 shadow-xs transition-colors hover:border-ink-300 has-checked:border-brand-300 has-checked:bg-brand-50 has-checked:text-brand-800"
+                  >
                     <input
                       type="checkbox"
                       name="suitableCategoryIds"
                       value={c.id}
                       defaultChecked={booth.suitable_category_ids.includes(c.id)}
+                      className="h-3.5 w-3.5 rounded border-ink-300 accent-brand-700"
                     />
                     {c.name}
                   </label>
@@ -216,24 +242,27 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
         {tab === "status" && (
           <div className="space-y-5">
             {safelyUnassigned ? (
-              <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => runAction(setBoothStatusAction(booth.id, eventId, "available"), "Marked available.")}>
-                Available
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => runAction(setBoothStatusAction(booth.id, eventId, "blocked"), "Marked blocked.")}>
-                Blocked
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => runAction(setBoothStatusAction(booth.id, eventId, "unavailable"), "Marked unavailable.")}>
-                Unavailable
-              </Button>
+              <div>
+                <p className="mb-2 text-sm font-medium text-ink-800">Set availability</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => runAction(setBoothStatusAction(booth.id, eventId, "available"), "Marked available.")}>
+                    Available
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => runAction(setBoothStatusAction(booth.id, eventId, "blocked"), "Marked blocked.")}>
+                    Blocked
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => runAction(setBoothStatusAction(booth.id, eventId, "unavailable"), "Marked unavailable.")}>
+                    Unavailable
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div>
-                <p className="mb-2 text-sm text-ink-600">
+              <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5">
+                <p className="mb-2.5 text-sm leading-relaxed text-amber-900">
                   Release this hold or assignment before changing the booth&rsquo;s availability.
                 </p>
                 <Button size="sm" variant="danger" onClick={() => runAction(adminReleaseBoothAction(booth.id, eventId), "Booth released.")}>
-                Release
+                  Release
                 </Button>
               </div>
             )}
@@ -259,28 +288,28 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
 
             {canOfferToVendor && (
               <div>
-              <p className="mb-1.5 text-sm font-medium text-ink-800">Hold or assign for a vendor</p>
-              <Input placeholder="Search vendor by business name…" value={vendorQuery} onChange={(e) => handleVendorSearch(e.target.value)} />
-              {vendorResults.length > 0 && (
-                <ul className="mt-2 max-h-48 divide-y divide-ink-100 overflow-y-auto rounded-lg border border-ink-100">
-                  {vendorResults.map((v) => (
-                    <li key={v.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <span className="truncate">{v.business_name}</span>
-                      <span className="flex shrink-0 gap-1">
-                        {booth.status === "available" && (
-                          <Button size="sm" variant="ghost" onClick={() => handleHold(v.id)}>
-                            Hold
+                <p className="mb-1.5 text-sm font-medium text-ink-800">Hold or assign for a vendor</p>
+                <Input placeholder="Search vendor by business name…" value={vendorQuery} onChange={(e) => handleVendorSearch(e.target.value)} />
+                {vendorResults.length > 0 && (
+                  <ul className="mt-2 max-h-48 divide-y divide-ink-100 overflow-y-auto rounded-xl border border-ink-100 bg-white shadow-xs">
+                    {vendorResults.map((v) => (
+                      <li key={v.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm transition-colors hover:bg-ink-50/60">
+                        <span className="truncate font-medium text-ink-800">{v.business_name}</span>
+                        <span className="flex shrink-0 gap-1">
+                          {booth.status === "available" && (
+                            <Button size="sm" variant="ghost" onClick={() => handleHold(v.id)}>
+                              Hold
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" onClick={() => handleAssign(v.id)}>
+                            Reserve
                           </Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => handleAssign(v.id)}>
-                          Reserve
-                        </Button>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -292,21 +321,27 @@ export function BoothDetailPanel({ booth, eventId, zones, categories, onDuplicat
             ) : history.length === 0 ? (
               <p className="text-sm text-ink-400">No history yet.</p>
             ) : (
-              <ul className="space-y-3">
+              <ol className="space-y-3.5">
                 {history.map((entry) => (
-                  <li key={entry.id} className="text-sm">
-                    <p className="font-medium text-ink-800">{entry.event_type.replace(/_/g, " ")}</p>
-                    <p className="text-xs text-ink-400">
-                      {formatDate(entry.created_at)}
-                      {entry.actor_name ? ` · by ${entry.actor_name}` : ""}
-                      {entry.business_name ? ` · ${entry.business_name}` : ""}
-                    </p>
+                  <li key={entry.id} className="flex gap-3 text-sm">
+                    <span
+                      className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-300 ring-4 ring-brand-50"
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-medium capitalize text-ink-800">{entry.event_type.replace(/_/g, " ")}</p>
+                      <p className="text-caption text-ink-400">
+                        {formatDate(entry.created_at)}
+                        {entry.actor_name ? ` · by ${entry.actor_name}` : ""}
+                        {entry.business_name ? ` · ${entry.business_name}` : ""}
+                      </p>
+                    </div>
                   </li>
                 ))}
-              </ul>
+              </ol>
             )}
-              </div>
-            )}
+          </div>
+        )}
       </div>
     </div>
   );

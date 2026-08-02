@@ -16,13 +16,15 @@ import {
 } from "@/app/admin/events/[id]/booths/actions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { BoothDetailPanel } from "@/components/admin/booth-detail-panel";
 import { useSyncedState } from "@/lib/use-synced-state";
-import { MAP_FEATURE_LABELS } from "@/lib/constants";
+import { BOOTH_STATUS_LABELS, MAP_FEATURE_LABELS } from "@/lib/constants";
 import type { Database } from "@/types/database";
 
 type Booth = Database["public"]["Tables"]["booths"]["Row"];
@@ -30,15 +32,16 @@ type Zone = Database["public"]["Tables"]["zones"]["Row"];
 type MapFeature = Database["public"]["Tables"]["map_features"]["Row"];
 type Category = { id: string; name: string };
 
+/** Matches the vendor floor plan's status palette so both maps read the same. */
 const STATUS_FILL: Record<string, string> = {
-  available: "#047857",
-  locked: "#92400e",
-  reserved: "#1d4ed8",
-  awaiting_payment: "#c2410c",
-  confirmed: "#6d28d9",
-  admin_held: "#334155",
-  blocked: "#b91c1c",
-  unavailable: "#525252",
+  available: "#10b981",
+  locked: "#f59e0b",
+  reserved: "#3b82f6",
+  awaiting_payment: "#f97316",
+  confirmed: "#7c3aed",
+  admin_held: "#64748b",
+  blocked: "#dc2626",
+  unavailable: "#a3a3a3",
 };
 
 const KEYBOARD_DELTAS = {
@@ -288,23 +291,28 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" onClick={handleAddBooth} loading={isPending}>
+            <Icon name="plus" size="sm" />
             Add booth
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={() => setZoneFormOpen(true)}>
+            <Icon name="map-pin" size="sm" />
             Add zone
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={() => setFeatureFormOpen(true)}>
+            <Icon name="map" size="sm" />
             Add map feature
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={handleReleaseExpired}>
+            <Icon name="clock" size="sm" />
             Release expired locks
           </Button>
         </div>
 
-        <div className="rounded-2xl border border-ink-100 bg-ink-50/40 p-3">
-          <p id={mapInstructionsId} className="mb-3 text-xs leading-5 text-ink-600">
-            Keyboard: focus a booth and press Enter to select it. Use the arrow keys to move it, or Shift + arrow
-            keys to resize it. Focus a map feature and use the arrow keys to move it.
+        <div className="rounded-2xl border border-ink-200 bg-ink-50/40 p-3 shadow-inner">
+          <p id={mapInstructionsId} className="mb-3 text-caption leading-5 text-ink-500">
+            <span className="font-semibold text-ink-600">Keyboard:</span> focus a booth and press Enter to select
+            it. Use the arrow keys to move it, or Shift + arrow keys to resize it. Focus a map feature and use the
+            arrow keys to move it.
           </p>
           <svg
             ref={svgRef}
@@ -312,7 +320,7 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
             role="group"
             aria-labelledby={mapTitleId}
             aria-describedby={mapInstructionsId}
-            className="aspect-square w-full touch-none rounded-xl bg-white shadow-inner"
+            className="aspect-square w-full touch-none rounded-xl border border-ink-100 bg-white"
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
           >
@@ -422,59 +430,71 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
           </svg>
         </div>
 
-        <div className="flex flex-wrap gap-3 text-xs text-ink-600">
+        <ul aria-label="Booth status legend" className="flex flex-wrap gap-x-3 gap-y-1.5 text-caption font-medium text-ink-600">
           {Object.entries(STATUS_FILL).map(([status, color]) => (
-            <span key={status} className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} aria-hidden="true" />
-              {status.replace(/_/g, " ")}
-            </span>
+            <li key={status} className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+              {BOOTH_STATUS_LABELS[status] ?? status.replace(/_/g, " ")}
+            </li>
           ))}
-        </div>
+        </ul>
 
         {zones.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {zones.map((z) => (
-              <span key={z.id} className="flex items-center gap-1.5 rounded-full border border-ink-200 px-2.5 py-1 text-xs text-ink-600">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: z.color }} aria-hidden="true" />
-                {z.name}
-                <button
-                  type="button"
-                  className="ml-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-ink-500 hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-red-700"
-                  onClick={() =>
-                    startTransition(async () => {
-                      await deleteZoneAction(z.id, eventId);
-                      router.refresh();
-                    })
-                  }
-                  aria-label={`Delete zone ${z.name}`}
+          <div>
+            <p className="mb-2 text-caption font-semibold uppercase tracking-[0.08em] text-ink-400">Zones</p>
+            <div className="flex flex-wrap gap-2">
+              {zones.map((z) => (
+                <span
+                  key={z.id}
+                  className="flex items-center gap-1.5 rounded-full border border-ink-200 bg-white py-1 pl-2.5 pr-1 text-xs font-medium text-ink-700 shadow-xs"
                 >
-                  ×
-                </button>
-              </span>
-            ))}
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: z.color }} aria-hidden="true" />
+                  {z.name}
+                  <button
+                    type="button"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-red-700"
+                    onClick={() =>
+                      startTransition(async () => {
+                        await deleteZoneAction(z.id, eventId);
+                        router.refresh();
+                      })
+                    }
+                    aria-label={`Delete zone ${z.name}`}
+                  >
+                    <Icon name="close" size="xs" />
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
         {localFeatures.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {localFeatures.map((f) => (
-              <span key={f.id} className="flex items-center gap-1.5 rounded-full border border-ink-200 px-2.5 py-1 text-xs text-ink-600">
-                {f.label || MAP_FEATURE_LABELS[f.type]}
-                <button
-                  type="button"
-                  className="ml-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-ink-500 hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-red-700"
-                  onClick={() =>
-                    startTransition(async () => {
-                      await deleteMapFeatureAction(f.id, eventId);
-                      router.refresh();
-                    })
-                  }
-                  aria-label={`Delete map feature ${f.label || MAP_FEATURE_LABELS[f.type]}`}
+          <div>
+            <p className="mb-2 text-caption font-semibold uppercase tracking-[0.08em] text-ink-400">Map features</p>
+            <div className="flex flex-wrap gap-2">
+              {localFeatures.map((f) => (
+                <span
+                  key={f.id}
+                  className="flex items-center gap-1.5 rounded-full border border-ink-200 bg-white py-1 pl-2.5 pr-1 text-xs font-medium text-ink-700 shadow-xs"
                 >
-                  ×
-                </button>
-              </span>
-            ))}
+                  {f.label || MAP_FEATURE_LABELS[f.type]}
+                  <button
+                    type="button"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-red-700"
+                    onClick={() =>
+                      startTransition(async () => {
+                        await deleteMapFeatureAction(f.id, eventId);
+                        router.refresh();
+                      })
+                    }
+                    aria-label={`Delete map feature ${f.label || MAP_FEATURE_LABELS[f.type]}`}
+                  >
+                    <Icon name="close" size="xs" />
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -492,8 +512,12 @@ export function BoothMapEditor({ eventId, initialBooths, zones, mapFeatures, cat
             onClose={() => setSelectedBoothId(null)}
           />
         ) : (
-          <div className="rounded-2xl border border-dashed border-ink-200 p-6 text-center text-sm text-ink-400">
-            Select a booth to edit its details, or add a new one.
+          <div className="rounded-2xl border border-dashed border-ink-200 bg-ink-50/30">
+            <EmptyState
+              icon={<Icon name="map-pin" size="lg" />}
+              title="No booth selected"
+              description="Select a booth on the map to edit its details, or add a new one."
+            />
           </div>
         )}
       </div>

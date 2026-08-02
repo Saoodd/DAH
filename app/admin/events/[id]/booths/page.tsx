@@ -31,16 +31,27 @@ export default async function AdminBoothMapPage({ params }: { params: Promise<{ 
   const loadError = boothsResult.error || zonesResult.error || featuresResult.error || categoriesResult.error;
 
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       <div>
-        <p className="text-sm text-ink-400">
-          <Link href="/admin/events" className="hover:text-brand-600">
+        <nav aria-label="Breadcrumb" className="text-sm text-ink-400">
+          <Link
+            href="/admin/events"
+            className="transition-colors hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+          >
             Events
-          </Link>{" "}
-          / {event.name}
-        </p>
-        <h1 className="text-2xl font-semibold text-ink-950">Booth map</h1>
-        <p className="mt-1 text-sm text-ink-500">Drag booths to move, drag the corner handle to resize.</p>
+          </Link>
+          <span aria-hidden="true"> / </span>
+          <Link
+            href={`/admin/events/${event.id}/edit`}
+            className="transition-colors hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+          >
+            {event.name}
+          </Link>
+          <span aria-hidden="true"> / </span>
+          <span className="text-ink-600">Booth map</span>
+        </nav>
+        <h1 className="mt-3 font-display text-h2 text-ink-950 sm:text-h1">Booth map</h1>
+        <p className="mt-2 text-sm text-ink-500">Drag booths to move them, or drag the corner handle to resize.</p>
       </div>
 
       {loadError ? (

@@ -30,17 +30,19 @@ const valueToneClasses: Record<NonNullable<StatCardProps["tone"]>, string> = {
 
 export function StatCard({ label, value, href, icon, tone = "default", hint }: StatCardProps) {
   const body = (
-    <Card
-      className={cn(
-        "h-full p-5 transition-all duration-150",
-        href && "hover:-translate-y-0.5 hover:border-ink-200 hover:shadow-md"
-      )}
-    >
+    <Card interactive={Boolean(href)} className="h-full p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-ink-500">{label}</p>
-          <p className={cn("mt-1.5 text-2xl font-semibold tracking-tight", valueToneClasses[tone])}>{value}</p>
-          {hint && <p className="mt-1 text-xs text-ink-400">{hint}</p>}
+          <p className="text-caption font-semibold uppercase tracking-[0.08em] text-ink-400">{label}</p>
+          <p
+            className={cn(
+              "mt-2 truncate font-display text-h2 tabular-nums sm:text-[2rem] sm:leading-none",
+              valueToneClasses[tone]
+            )}
+          >
+            {value}
+          </p>
+          {hint && <p className="mt-1.5 text-caption text-ink-400">{hint}</p>}
         </div>
         {icon && (
           <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", toneClasses[tone])}>
@@ -54,7 +56,11 @@ export function StatCard({ label, value, href, icon, tone = "default", hint }: S
   if (!href) return body;
 
   return (
-    <Link href={href} className="group block" aria-label={`${label}: ${value}`}>
+    <Link
+      href={href}
+      className="block rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+      aria-label={`${label}: ${value}`}
+    >
       {body}
     </Link>
   );
