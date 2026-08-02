@@ -151,9 +151,8 @@ export default async function AdminDashboardPage() {
     .from("events")
     .select("id, name")
     .eq("registration_status", "open")
-    .order("starts_at", { ascending: true })
+    .order("start_at", { ascending: true })
     .limit(1)
-
     .maybeSingle();
   if (openEventError) throw new Error("Could not load the active event dashboard.");
 
