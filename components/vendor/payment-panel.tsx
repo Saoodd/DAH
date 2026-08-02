@@ -9,8 +9,9 @@ import { Alert } from "@/components/ui/alert";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FileInput } from "@/components/ui/file-input";
+import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/toast";
-import { PAYMENT_STATUS_LABELS } from "@/lib/constants";
+import { PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS } from "@/lib/constants";
 import { formatAED, formatDate } from "@/lib/format";
 import type { Database } from "@/types/database";
 
@@ -108,13 +109,17 @@ export function PaymentPanel({
     <div className="space-y-6 print:space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-sm text-ink-500">Booth {boothNumber}</p>
-          <p className="text-2xl font-semibold text-ink-950">{formatAED(totalAmount)}</p>
-          <p className="text-xs text-ink-400">
+          <p className="text-caption font-semibold uppercase tracking-[0.12em] text-ink-400">
+            Amount due · Booth {boothNumber}
+          </p>
+          <p className="mt-1 font-display text-h1 tabular-nums text-ink-950">{formatAED(totalAmount)}</p>
+          <p className="mt-1 text-sm tabular-nums text-ink-500">
             {formatAED(boothPriceBeforeVat)} + {formatAED(vatAmount)} VAT
           </p>
         </div>
-        <Badge className="self-start border-ink-200 bg-ink-50 text-ink-700 print:hidden">
+        <Badge
+          className={`self-start print:hidden ${PAYMENT_STATUS_COLORS[payment.status] ?? "border-ink-200 bg-ink-50 text-ink-700"}`}
+        >
           {PAYMENT_STATUS_LABELS[payment.status]}
         </Badge>
       </div>
@@ -125,6 +130,7 @@ export function PaymentPanel({
           title={`${minutes}:${String(seconds).padStart(2, "0")} remaining`}
           role="status"
           aria-live="off"
+          className="tabular-nums"
         >
           Complete payment before the countdown ends, or your booth will be released automatically.
         </Alert>
@@ -160,13 +166,21 @@ export function PaymentPanel({
       )}
 
       {payment.status === "paid" && (
-        <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center print:border-0 print:bg-white">
-          <p className="text-lg font-semibold text-emerald-900">Payment confirmed</p>
-          <p className="text-sm text-emerald-700">
-            Verified {formatDate(payment.verified_at)}
-            {payment.transfer_reference ? ` · Ref ${payment.transfer_reference}` : ""}
-            {payment.payment_reference ? ` · Ref ${payment.payment_reference}` : ""}
-          </p>
+        <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center print:border-0 print:bg-white">
+          <span
+            className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+            aria-hidden="true"
+          >
+            <Icon name="check" strokeWidth={2} />
+          </span>
+          <div>
+            <p className="font-display text-h3 text-emerald-950">Payment confirmed</p>
+            <p className="mt-1 text-sm text-emerald-700">
+              Verified {formatDate(payment.verified_at)}
+              {payment.transfer_reference ? ` · Ref ${payment.transfer_reference}` : ""}
+              {payment.payment_reference ? ` · Ref ${payment.payment_reference}` : ""}
+            </p>
+          </div>
           <Button type="button" variant="outline" className="print:hidden" onClick={() => window.print()}>
             Print / save confirmation
           </Button>
@@ -175,9 +189,9 @@ export function PaymentPanel({
 
       {["payment_required", "pending_payment"].includes(payment.status) && (
         <fieldset className="print:hidden" disabled={isPending}>
-          <legend className="mb-2 text-sm font-semibold text-ink-900">Choose a payment method</legend>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block cursor-pointer">
+          <legend className="mb-3 text-sm font-semibold text-ink-900">Choose a payment method</legend>
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+            <label className="group block cursor-pointer">
               <input
                 type="radio"
                 name={methodGroupId}
@@ -187,12 +201,22 @@ export function PaymentPanel({
                 aria-controls={method === "adcb_pace_pay" ? adcbPanelId : undefined}
                 className="peer sr-only"
               />
-              <span className="block rounded-xl border border-ink-200 p-4 text-left transition-[border-color,box-shadow] duration-150 hover:border-ink-300 peer-checked:border-ink-900 peer-checked:ring-1 peer-checked:ring-ink-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-60 motion-reduce:transition-none">
-                <span className="block font-semibold text-ink-900">ADCB Pace Pay</span>
-                <span className="mt-1 block text-xs text-ink-500">Pay by card via the link Dar Al Hay sends you.</span>
+              <span className="flex h-full items-start gap-3.5 rounded-xl border border-ink-200 bg-white p-4 text-left shadow-xs transition-[border-color,box-shadow] duration-150 hover:border-ink-300 peer-checked:border-ink-900 peer-checked:ring-1 peer-checked:ring-ink-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-60 motion-reduce:transition-none">
+                <span
+                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-50 text-ink-600 ring-1 ring-inset ring-ink-200"
+                  aria-hidden="true"
+                >
+                  <Icon name="credit-card" size="sm" strokeWidth={1.5} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-semibold text-ink-900">ADCB Pace Pay</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-ink-500">
+                    Pay by card via the link Dar Al Hay sends you.
+                  </span>
+                </span>
               </span>
             </label>
-            <label className="block cursor-pointer">
+            <label className="group block cursor-pointer">
               <input
                 type="radio"
                 name={methodGroupId}
@@ -202,9 +226,19 @@ export function PaymentPanel({
                 aria-controls={method === "bank_transfer" ? bankPanelId : undefined}
                 className="peer sr-only"
               />
-              <span className="block rounded-xl border border-ink-200 p-4 text-left transition-[border-color,box-shadow] duration-150 hover:border-ink-300 peer-checked:border-ink-900 peer-checked:ring-1 peer-checked:ring-ink-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-60 motion-reduce:transition-none">
-                <span className="block font-semibold text-ink-900">Bank transfer (IBAN)</span>
-                <span className="mt-1 block text-xs text-ink-500">Transfer directly and upload your receipt.</span>
+              <span className="flex h-full items-start gap-3.5 rounded-xl border border-ink-200 bg-white p-4 text-left shadow-xs transition-[border-color,box-shadow] duration-150 hover:border-ink-300 peer-checked:border-ink-900 peer-checked:ring-1 peer-checked:ring-ink-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-60 motion-reduce:transition-none">
+                <span
+                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-50 text-ink-600 ring-1 ring-inset ring-ink-200"
+                  aria-hidden="true"
+                >
+                  <Icon name="building" size="sm" strokeWidth={1.5} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-semibold text-ink-900">Bank transfer (IBAN)</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-ink-500">
+                    Transfer directly and upload your receipt.
+                  </span>
+                </span>
               </span>
             </label>
           </div>
@@ -212,7 +246,7 @@ export function PaymentPanel({
       )}
 
       {method === "adcb_pace_pay" && ["payment_required", "pending_payment"].includes(payment.status) && (
-        <div id={adcbPanelId} className="space-y-4 rounded-xl border border-ink-100 p-4 print:hidden">
+        <div id={adcbPanelId} className="space-y-4 rounded-2xl border border-ink-100 bg-white p-4 shadow-xs animate-[var(--animate-in)] print:hidden sm:p-5">
           {payment.payment_link ? (
             <a
               href={payment.payment_link}
@@ -240,22 +274,25 @@ export function PaymentPanel({
       )}
 
       {method === "bank_transfer" && ["payment_required", "pending_payment"].includes(payment.status) && (
-        <div id={bankPanelId} className="space-y-4 rounded-xl border border-ink-100 p-4 print:hidden">
+        <div id={bankPanelId} className="space-y-4 rounded-2xl border border-ink-100 bg-white p-4 shadow-xs animate-[var(--animate-in)] print:hidden sm:p-5">
           {bankDetails ? (
-            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-ink-400">Bank</dt>
-              <dd className="min-w-0 text-right text-ink-800 [overflow-wrap:anywhere]">{bankDetails.bank_name}</dd>
-              <dt className="text-ink-400">Account name</dt>
-              <dd className="min-w-0 text-right text-ink-800 [overflow-wrap:anywhere]">{bankDetails.account_name}</dd>
-              <dt className="text-ink-400">IBAN</dt>
-              <dd className="min-w-0 text-right font-mono text-xs text-ink-800 [overflow-wrap:anywhere] sm:text-sm">{bankDetails.iban}</dd>
-              {bankDetails.swift_code && (
-                <>
-                  <dt className="text-ink-400">SWIFT</dt>
-                  <dd className="min-w-0 text-right text-ink-800 [overflow-wrap:anywhere]">{bankDetails.swift_code}</dd>
-                </>
-              )}
-            </dl>
+            <div className="rounded-xl border border-ink-100 bg-ink-50/60 px-4 py-3">
+              <p className="text-caption font-semibold uppercase tracking-[0.12em] text-ink-400">Transfer to</p>
+              <dl className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+                <dt className="text-ink-500">Bank</dt>
+                <dd className="min-w-0 text-right font-medium text-ink-800 [overflow-wrap:anywhere]">{bankDetails.bank_name}</dd>
+                <dt className="text-ink-500">Account name</dt>
+                <dd className="min-w-0 text-right font-medium text-ink-800 [overflow-wrap:anywhere]">{bankDetails.account_name}</dd>
+                <dt className="text-ink-500">IBAN</dt>
+                <dd className="min-w-0 text-right font-mono text-xs font-medium text-ink-800 [overflow-wrap:anywhere] sm:text-sm">{bankDetails.iban}</dd>
+                {bankDetails.swift_code && (
+                  <>
+                    <dt className="text-ink-500">SWIFT</dt>
+                    <dd className="min-w-0 text-right font-medium text-ink-800 [overflow-wrap:anywhere]">{bankDetails.swift_code}</dd>
+                  </>
+                )}
+              </dl>
+            </div>
           ) : (
             <Alert variant="warning">Bank details haven&rsquo;t been configured yet — contact Dar Al Hay.</Alert>
           )}

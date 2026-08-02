@@ -26,10 +26,10 @@ export default async function VendorProfilePage() {
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-ink-950">Business profile</h1>
-        <p className="mt-1 text-sm text-ink-500">
+        <h1 className="font-display text-h1 text-ink-950">Business profile</h1>
+        <p className="mt-2 max-w-2xl text-sm text-ink-500">
           This information is saved permanently and reused for every future Dar Al Hay event.
         </p>
       </div>
@@ -39,7 +39,7 @@ export default async function VendorProfilePage() {
           <CardTitle>Details</CardTitle>
           <CardDescription>Editing after approval requires a quick admin re-review.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="py-6">
           <BusinessProfileForm
             categories={categories ?? []}
             defaultValues={{

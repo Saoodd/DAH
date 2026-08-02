@@ -93,7 +93,7 @@ export function WaitingListPanel({
     return (
       <Card>
         <CardContent className="space-y-4 py-6">
-          <Alert variant="success" title={`Booth ${invitedBoothNumber} is available for you`}>
+          <Alert variant="success" title={`Booth ${invitedBoothNumber} is available for you`} className="tabular-nums">
             {minutes !== null ? `Accept within ${minutes}:${String(seconds).padStart(2, "0")} or it will be offered to the next vendor.` : ""}
           </Alert>
           <div className="flex gap-3">

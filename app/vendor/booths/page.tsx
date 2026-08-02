@@ -83,8 +83,8 @@ export default async function VendorBoothsPage() {
 
   if (!event) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold text-ink-950">Select your booth</h1>
+      <div className="page-enter space-y-6">
+        <h1 className="font-display text-h1 text-ink-950">Select your booth</h1>
         <Alert variant="info">Booth selection is not currently available.</Alert>
       </div>
     );
@@ -92,14 +92,17 @@ export default async function VendorBoothsPage() {
 
   if (!application || !["approved", "booth_selected", "awaiting_payment"].includes(application.status)) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold text-ink-950">Select your booth</h1>
+      <div className="page-enter space-y-6">
+        <h1 className="font-display text-h1 text-ink-950">Select your booth</h1>
         <Alert variant="info">
           {!application
             ? "Apply to this event from your dashboard first."
             : `Your application is ${APPLICATION_STATUS_LABELS[application.status]?.toLowerCase() ?? application.status}. Booth selection opens once it's approved.`}
         </Alert>
-        <Link href="/vendor" className="text-sm font-medium text-brand-600 hover:text-brand-700">
+        <Link
+          href="/vendor"
+          className="inline-flex items-center gap-1.5 rounded-sm text-sm font-medium text-brand-700 hover:text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-700"
+        >
           Back to dashboard
         </Link>
       </div>
@@ -157,16 +160,20 @@ export default async function VendorBoothsPage() {
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       <div>
-        <p className="text-sm text-ink-400">
-          <Link href="/vendor" className="hover:text-brand-600">
+        <nav aria-label="Breadcrumb" className="text-caption font-medium text-ink-400">
+          <Link
+            href="/vendor"
+            className="rounded-sm transition-colors hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+          >
             Dashboard
-          </Link>{" "}
-          / {event.name}
-        </p>
-        <h1 className="text-2xl font-semibold text-ink-950">Select your booth</h1>
-        <p className="mt-1 text-sm text-ink-500">Tap a booth to see details. Zoom and pan to explore the floor plan.</p>
+          </Link>
+          <span aria-hidden="true" className="mx-1.5">/</span>
+          <span className="text-ink-500">{event.name}</span>
+        </nav>
+        <h1 className="mt-2 font-display text-h1 text-ink-950">Select your booth</h1>
+        <p className="mt-2 text-sm text-ink-500">Tap a booth to see details. Zoom and pan to explore the floor plan.</p>
       </div>
 
       {!application.booth_id && (

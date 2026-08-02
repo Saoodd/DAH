@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -9,8 +10,9 @@ import {
   confirmBoothSelectionAction,
   changeBoothAction,
 } from "@/app/vendor/booths/actions";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/toast";
 import { useSyncedState } from "@/lib/use-synced-state";
 import { BOOTH_STATUS_BADGE_COLORS, BOOTH_STATUS_LABELS, MAP_FEATURE_LABELS } from "@/lib/constants";
@@ -26,6 +28,9 @@ export interface BoothWithRecommendation extends Booth {
   reasons: string[];
   warning: string | null;
 }
+
+/** Brand gold — makes "which booth is mine" readable at a glance. */
+const MY_BOOTH_FILL = "#93692e";
 
 const STATUS_FILL: Record<string, string> = {
   available: "#10b981",
@@ -261,14 +266,28 @@ export function FloorPlan({
   return (
     <div className="space-y-4">
       {myBooth?.status === "locked" && (
-        <div className="sticky top-2 z-20 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-amber-900">
-              Booth {myBooth.booth_number} held for you — {minutes}:{String(seconds).padStart(2, "0")} remaining
-            </p>
-            <p className="text-xs text-amber-700">Confirm now, or it releases automatically when time runs out.</p>
+        <div className="sticky top-2 z-20 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-md sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex items-center gap-4">
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white font-mono text-sm font-semibold tabular-nums text-amber-900 shadow-xs ring-1 ring-amber-200"
+              aria-hidden="true"
+            >
+              {minutes}:{String(seconds).padStart(2, "0")}
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-amber-950">
+                Booth {myBooth.booth_number} is held for you
+                <span className="sr-only">
+                  {" "}
+                  — {minutes}:{String(seconds).padStart(2, "0")} remaining
+                </span>
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-amber-800">
+                Confirm now, or it releases automatically when time runs out.
+              </p>
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Button size="sm" variant="outline" onClick={handleRelease} loading={isPending}>
               Release
             </Button>
@@ -280,41 +299,88 @@ export function FloorPlan({
       )}
 
       {myBooth?.status === "awaiting_payment" && (
-        <div className="rounded-2xl border border-orange-300 bg-orange-50 p-4">
-          <p className="text-sm font-semibold text-orange-900">Booth {myBooth.booth_number} confirmed — awaiting payment</p>
-          <p className="mt-1 text-xs text-orange-700">Head to your dashboard to complete payment once it opens.</p>
+        <div className="flex flex-col gap-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex items-center gap-4">
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-orange-700 shadow-xs ring-1 ring-orange-200"
+              aria-hidden="true"
+            >
+              <Icon name="credit-card" strokeWidth={1.5} />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-orange-950">
+                Booth {myBooth.booth_number} confirmed — awaiting payment
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-orange-800">
+                Complete payment to finalise your spot at the event.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/vendor/payment"
+            className={buttonVariants({ size: "sm", className: "shrink-0 self-start sm:self-auto" })}
+          >
+            Complete payment
+            <Icon name="arrow-right" size="sm" />
+          </Link>
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex flex-wrap gap-3 text-xs text-ink-600">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <ul aria-label="Booth status legend" className="flex flex-wrap gap-x-3 gap-y-1.5 text-caption font-medium text-ink-600">
+          {myBoothId && (
+            <li className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: MY_BOOTH_FILL }} />
+              Your booth
+            </li>
+          )}
           {Object.entries(STATUS_FILL).map(([status, color]) => (
-            <span key={status} className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} />
+            <li key={status} className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
               {BOOTH_STATUS_LABELS[status]}
-            </span>
+            </li>
           ))}
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm border-2 border-brand-500 bg-white" />
+          <li className="flex items-center gap-1.5">
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full border-2 border-brand-500 bg-white" />
             Recommended
-          </span>
-        </div>
-        <div className="flex gap-1">
-          <Button size="sm" variant="outline" onClick={() => zoomBy(1.25)}>
-            +
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => zoomBy(0.8)}>
-            −
-          </Button>
-          <Button size="sm" variant="ghost" onClick={resetView}>
+          </li>
+        </ul>
+        <div
+          className="flex shrink-0 items-center gap-px self-start overflow-hidden rounded-lg border border-ink-200 bg-ink-100 shadow-xs"
+          role="group"
+          aria-label="Map zoom controls"
+        >
+          <button
+            type="button"
+            aria-label="Zoom in"
+            onClick={() => zoomBy(1.25)}
+            className="flex h-9 w-9 items-center justify-center bg-white text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
+          >
+            <Icon name="plus" size="sm" />
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom out"
+            onClick={() => zoomBy(0.8)}
+            className="flex h-9 w-9 items-center justify-center bg-white text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
+          >
+            <Icon size="sm">
+              <path d="M4.5 12h15" />
+            </Icon>
+          </button>
+          <button
+            type="button"
+            onClick={resetView}
+            className="flex h-9 items-center justify-center bg-white px-3 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
+          >
             Reset
-          </Button>
+          </button>
         </div>
       </div>
 
       <div
         ref={containerRef}
-        className="relative aspect-square w-full touch-none overflow-hidden rounded-2xl border border-ink-100 bg-ink-50/40"
+        className="relative aspect-square w-full touch-none overflow-hidden rounded-2xl border border-ink-200 bg-ink-50/40 shadow-inner"
         onWheel={onWheel}
         onPointerDown={onPointerDownBackground}
         onPointerMove={onPointerMove}
@@ -352,7 +418,7 @@ export function FloorPlan({
                   role="button"
                   tabIndex={0}
                   aria-label={label}
-                  className="cursor-pointer outline-none focus-visible:opacity-80"
+                  className="cursor-pointer outline-none transition-opacity duration-150 hover:opacity-85 focus-visible:opacity-70 motion-reduce:transition-none"
                 >
                   <rect
                     x={b.map_x}
@@ -360,9 +426,9 @@ export function FloorPlan({
                     width={b.map_width}
                     height={b.map_height}
                     rx={0.8}
-                    fill={mine ? "#7c3aed" : STATUS_FILL[displayStatus]}
-                    stroke={b.recommended ? "#b8873c" : "#ffffff"}
-                    strokeWidth={b.recommended ? 1 : 0.4}
+                    fill={mine ? MY_BOOTH_FILL : STATUS_FILL[displayStatus]}
+                    stroke={mine ? "#ecd8ab" : b.recommended ? "#b8873c" : "#ffffff"}
+                    strokeWidth={mine || b.recommended ? 1 : 0.4}
                   />
                   <text x={b.map_x + b.map_width / 2} y={b.map_y + b.map_height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={2.4} className="pointer-events-none select-none fill-white font-medium" aria-hidden="true">
                     {b.booth_number}
@@ -373,6 +439,10 @@ export function FloorPlan({
           </svg>
         </div>
       </div>
+
+      <p className="text-center text-caption text-ink-400">
+        Drag to pan · pinch or scroll to zoom · tap any booth for details
+      </p>
 
       {selectedBooth && (
         <BoothDetailModal
@@ -429,41 +499,81 @@ function BoothDetailModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <div className="absolute inset-0 bg-ink-950/50" onClick={onClose} aria-hidden="true" />
-      <div ref={panelRef} tabIndex={-1} className="relative w-full max-w-md rounded-t-2xl bg-white p-6 shadow-2xl outline-none sm:rounded-2xl animate-[var(--animate-scale-in)]">
-        <div className="flex items-center justify-between">
-          <h2 id={titleId} className="text-lg font-semibold text-ink-950">Booth {booth.booth_number}</h2>
-          <Badge className={BOOTH_STATUS_BADGE_COLORS[mine ? "confirmed" : booth.status]}>
+    <div className="fixed inset-0 z-30 flex items-end justify-center sm:items-center sm:px-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div
+        className="absolute inset-0 animate-[var(--animate-in)] bg-ink-950/50 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="relative max-h-[min(90vh,40rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-5 shadow-xl outline-none animate-[var(--animate-scale-in)] sm:rounded-2xl sm:p-6"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-caption font-semibold uppercase tracking-[0.12em] text-ink-400">
+              {zoneName ?? "Floor plan"}
+            </p>
+            <h2 id={titleId} className="mt-1 font-display text-h3 text-ink-950">
+              Booth {booth.booth_number}
+            </h2>
+          </div>
+          <Badge
+            className={
+              mine
+                ? "border-brand-300 bg-brand-100 text-brand-800"
+                : BOOTH_STATUS_BADGE_COLORS[booth.status]
+            }
+          >
             {mine ? "Your selection" : BOOTH_STATUS_LABELS[booth.status]}
           </Badge>
         </div>
 
         {booth.recommended && (
-          <p className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
-            Recommended: {booth.reasons.join(", ")}
+          <p className="mt-4 flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2.5 text-xs leading-relaxed text-brand-800">
+            <Icon name="circle-check" size="xs" strokeWidth={1.75} className="mt-0.5 shrink-0 text-brand-600" />
+            <span>Recommended: {booth.reasons.join(", ")}</span>
           </p>
         )}
-        {booth.warning && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{booth.warning}</p>}
+        {booth.warning && (
+          <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800">
+            <Icon name="warning" size="xs" strokeWidth={1.75} className="mt-0.5 shrink-0 text-amber-600" />
+            <span>{booth.warning}</span>
+          </p>
+        )}
 
-        <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
-          <dt className="text-ink-400">Size</dt>
-          <dd className="text-right text-ink-800">{booth.size_label ?? "—"}</dd>
-          <dt className="text-ink-400">Zone</dt>
-          <dd className="text-right text-ink-800">{zoneName ?? "—"}</dd>
-          <dt className="text-ink-400">Price before VAT</dt>
-          <dd className="text-right text-ink-800">{formatAED(booth.price_before_vat)}</dd>
-          <dt className="text-ink-400">VAT (5%)</dt>
-          <dd className="text-right text-ink-800">{formatAED(vat)}</dd>
-          <dt className="font-medium text-ink-600">Total</dt>
-          <dd className="text-right font-semibold text-ink-950">{formatAED(booth.price_before_vat + vat)}</dd>
+        <dl className="mt-5 grid grid-cols-2 gap-y-2.5 text-sm">
+          <dt className="text-ink-500">Size</dt>
+          <dd className="text-right font-medium text-ink-800">{booth.size_label ?? "—"}</dd>
+          <dt className="text-ink-500">Zone</dt>
+          <dd className="text-right font-medium text-ink-800">{zoneName ?? "—"}</dd>
           {booth.distance_from_entrance !== null && (
             <>
-              <dt className="text-ink-400">From entrance</dt>
-              <dd className="text-right text-ink-800">{booth.distance_from_entrance}m</dd>
+              <dt className="text-ink-500">From entrance</dt>
+              <dd className="text-right font-medium text-ink-800">{booth.distance_from_entrance}m</dd>
             </>
           )}
         </dl>
+
+        <div className="mt-4 rounded-xl border border-ink-100 bg-ink-50/60 px-4 py-3">
+          <dl className="space-y-2 text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-ink-500">Price before VAT</dt>
+              <dd className="font-medium tabular-nums text-ink-800">{formatAED(booth.price_before_vat)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-ink-500">VAT (5%)</dt>
+              <dd className="font-medium tabular-nums text-ink-800">{formatAED(vat)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-4 border-t border-ink-200/70 pt-2.5">
+              <dt className="font-semibold text-ink-900">Total</dt>
+              <dd className="font-display text-h4 tabular-nums text-ink-950">
+                {formatAED(booth.price_before_vat + vat)}
+              </dd>
+            </div>
+          </dl>
+        </div>
 
         <div className="mt-6 flex justify-end gap-3">
           <Button variant="outline" onClick={onClose}>
@@ -476,7 +586,7 @@ function BoothDetailModal({
           )}
         </div>
         {!canInteract && !mine && (
-          <p className="mt-3 text-xs text-ink-400">Booth selection isn&rsquo;t open for your application yet.</p>
+          <p className="mt-3 text-right text-xs text-ink-400">Booth selection isn&rsquo;t open for your application yet.</p>
         )}
       </div>
     </div>
