@@ -11,6 +11,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { Icon } from "@/components/ui/icon";
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -44,15 +45,35 @@ export function ResetPasswordForm() {
   }
 
   if (success) {
-    return <Alert variant="success" title="Password updated">Redirecting to your dashboard…</Alert>;
+    return (
+      <div className="py-4 text-center" role="status">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+          <Icon name="circle-check" strokeWidth={1.5} />
+        </div>
+        <h2 className="mt-4 font-display text-h4 text-ink-950">Password updated</h2>
+        <p className="mt-2 text-body-sm text-ink-500">Taking you to your dashboard&hellip;</p>
+      </div>
+    );
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
       {serverError && <Alert variant="error">{serverError}</Alert>}
 
-      <Field label="New password" htmlFor="password" error={errors.password?.message} required>
-        <Input id="password" type="password" autoComplete="new-password" {...register("password")} aria-invalid={!!errors.password} />
+      <Field
+        label="New password"
+        htmlFor="password"
+        error={errors.password?.message}
+        hint="8+ characters, with at least one letter and one number"
+        required
+      >
+        <Input
+          id="password"
+          type="password"
+          autoComplete="new-password"
+          {...register("password")}
+          aria-invalid={!!errors.password}
+        />
       </Field>
       <Field label="Confirm new password" htmlFor="confirmPassword" error={errors.confirmPassword?.message} required>
         <Input
@@ -63,7 +84,7 @@ export function ResetPasswordForm() {
           aria-invalid={!!errors.confirmPassword}
         />
       </Field>
-      <Button type="submit" className="w-full" loading={isPending}>
+      <Button type="submit" size="lg" className="w-full" loading={isPending}>
         Update password
       </Button>
     </form>

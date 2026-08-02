@@ -45,30 +45,34 @@ export function LoginForm({ next }: { next?: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
       {serverError && <Alert variant="error">{serverError}</Alert>}
 
       <Field label="Email address" htmlFor="email" error={errors.email?.message} required>
         <Input id="email" type="email" autoComplete="email" {...register("email")} aria-invalid={!!errors.email} />
       </Field>
 
-      <Field label="Password" htmlFor="password" error={errors.password?.message} required>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          {...register("password")}
-          aria-invalid={!!errors.password}
-        />
-      </Field>
-
-      <div className="flex justify-end">
-        <Link href="/forgot-password" className="text-sm font-medium text-brand-600 hover:text-brand-700">
-          Forgot password?
-        </Link>
+      <div>
+        <Field label="Password" htmlFor="password" error={errors.password?.message} required>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            {...register("password")}
+            aria-invalid={!!errors.password}
+          />
+        </Field>
+        <div className="mt-2 flex justify-end">
+          <Link
+            href="/forgot-password"
+            className="text-sm font-medium text-brand-700 underline-offset-4 transition-colors hover:text-brand-800 hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
       </div>
 
-      <Button type="submit" className="w-full" loading={isPending}>
+      <Button type="submit" size="lg" className="w-full" loading={isPending}>
         Log in
       </Button>
     </form>
