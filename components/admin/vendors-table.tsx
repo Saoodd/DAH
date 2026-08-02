@@ -73,7 +73,7 @@ export function VendorsTable({ businesses }: { businesses: VendorRow[] }) {
   }
 
   const checkboxClasses =
-    "h-4 w-4 rounded border-ink-300 accent-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700";
+    "h-5 w-5 rounded border-ink-300 accent-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700";
 
   return (
     <div>

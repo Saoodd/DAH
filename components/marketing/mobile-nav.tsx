@@ -43,55 +43,65 @@ export function MobileNav({ isAuthenticated, dashboardHref }: MobileNavProps) {
       </button>
 
       {open && (
-        <div
-          id="mobile-nav-panel"
-          className="fixed inset-x-0 top-16 z-40 origin-top animate-scale-in border-b border-ink-100 bg-background/95 shadow-lg backdrop-blur-xl md:hidden"
-        >
-          <nav aria-label="Mobile navigation" className="mx-auto max-w-6xl px-4 pb-5 pt-3 sm:px-6">
-            <ul className="flex flex-col gap-1">
-              {NAV_LINKS.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    onClick={close}
-                    className="flex h-12 items-center rounded-xl px-3 text-body font-medium text-ink-700 transition-colors duration-150 hover:bg-ink-100 hover:text-ink-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+        <>
+          <div
+            className="fixed inset-0 top-16 z-30 animate-in bg-ink-950/25 md:hidden"
+            onClick={close}
+            aria-hidden="true"
+          />
+          <div
+            id="mobile-nav-panel"
+            className="fixed inset-x-0 top-16 z-40 origin-top animate-scale-in border-b border-ink-100 bg-background shadow-lg md:hidden"
+          >
+            <nav
+              aria-label="Mobile navigation"
+              className="mx-auto max-w-6xl px-4 pb-5 pt-3 sm:px-6"
+            >
+              <ul className="flex flex-col gap-1">
+                {NAV_LINKS.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      onClick={close}
+                      className="flex h-12 items-center rounded-xl px-3 text-body font-medium text-ink-700 transition-colors duration-150 hover:bg-ink-100 hover:text-ink-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
 
-            <div className="mt-3 flex flex-col gap-2.5 border-t border-ink-100 pt-4">
-              {isAuthenticated ? (
-                <Link
-                  href={dashboardHref}
-                  onClick={close}
-                  className={buttonVariants({ variant: "primary" })}
-                >
-                  Dashboard
-                </Link>
-              ) : (
-                <>
+              <div className="mt-3 flex flex-col gap-2.5 border-t border-ink-100 pt-4">
+                {isAuthenticated ? (
                   <Link
-                    href="/signup"
+                    href={dashboardHref}
                     onClick={close}
                     className={buttonVariants({ variant: "primary" })}
                   >
-                    Apply as a Vendor
+                    Dashboard
                   </Link>
-                  <Link
-                    href="/login"
-                    onClick={close}
-                    className={buttonVariants({ variant: "outline" })}
-                  >
-                    Log in
-                  </Link>
-                </>
-              )}
-            </div>
-          </nav>
-        </div>
+                ) : (
+                  <>
+                    <Link
+                      href="/signup"
+                      onClick={close}
+                      className={buttonVariants({ variant: "primary" })}
+                    >
+                      Apply as a Vendor
+                    </Link>
+                    <Link
+                      href="/login"
+                      onClick={close}
+                      className={buttonVariants({ variant: "outline" })}
+                    >
+                      Log in
+                    </Link>
+                  </>
+                )}
+              </div>
+            </nav>
+          </div>
+        </>
       )}
     </div>
   );

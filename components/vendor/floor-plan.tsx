@@ -354,7 +354,7 @@ export function FloorPlan({
             type="button"
             aria-label="Zoom in"
             onClick={() => zoomBy(1.25)}
-            className="flex h-9 w-9 items-center justify-center bg-white text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
+            className="flex h-10 w-10 items-center justify-center bg-white text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
           >
             <Icon name="plus" size="sm" />
           </button>
@@ -362,7 +362,7 @@ export function FloorPlan({
             type="button"
             aria-label="Zoom out"
             onClick={() => zoomBy(0.8)}
-            className="flex h-9 w-9 items-center justify-center bg-white text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
+            className="flex h-10 w-10 items-center justify-center bg-white text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
           >
             <Icon size="sm">
               <path d="M4.5 12h15" />
@@ -371,7 +371,7 @@ export function FloorPlan({
           <button
             type="button"
             onClick={resetView}
-            className="flex h-9 items-center justify-center bg-white px-3 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
+            className="flex h-10 items-center justify-center bg-white px-3 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950 focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
           >
             Reset
           </button>

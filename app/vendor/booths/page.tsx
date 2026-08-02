@@ -84,7 +84,7 @@ export default async function VendorBoothsPage() {
   if (!event) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Select your booth</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Select your booth</h1>
         <Alert variant="info">Booth selection is not currently available.</Alert>
       </div>
     );
@@ -93,7 +93,7 @@ export default async function VendorBoothsPage() {
   if (!application || !["approved", "booth_selected", "awaiting_payment"].includes(application.status)) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Select your booth</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Select your booth</h1>
         <Alert variant="info">
           {!application
             ? "Apply to this event from your dashboard first."
@@ -172,7 +172,7 @@ export default async function VendorBoothsPage() {
           <span aria-hidden="true" className="mx-1.5">/</span>
           <span className="text-ink-500">{event.name}</span>
         </nav>
-        <h1 className="mt-2 font-display text-h1 text-ink-950">Select your booth</h1>
+        <h1 className="mt-2 font-display text-h2 text-ink-950 sm:text-h1">Select your booth</h1>
         <p className="mt-2 text-sm text-ink-500">Tap a booth to see details. Zoom and pan to explore the floor plan.</p>
       </div>
 

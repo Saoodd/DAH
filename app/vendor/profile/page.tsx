@@ -28,7 +28,7 @@ export default async function VendorProfilePage() {
   return (
     <div className="page-enter space-y-6">
       <div>
-        <h1 className="font-display text-h1 text-ink-950">Business profile</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Business profile</h1>
         <p className="mt-2 max-w-2xl text-sm text-ink-500">
           This information is saved permanently and reused for every future Dar Al Hay event.
         </p>

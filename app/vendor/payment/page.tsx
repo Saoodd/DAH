@@ -26,7 +26,7 @@ export default async function VendorPaymentPage() {
   if (paymentsError) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Payment</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Payment</h1>
         <Alert variant="error" title="Could not load payment">
           Please refresh the page. If the problem continues, contact Dar Al Hay.
         </Alert>
@@ -46,7 +46,7 @@ export default async function VendorPaymentPage() {
   if (!paymentCandidate) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Payment</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Payment</h1>
         <Alert variant="info" title="No payment requested">
           Your payment details will appear here after you confirm a booth.
         </Alert>
@@ -70,7 +70,7 @@ export default async function VendorPaymentPage() {
   if (applicationCandidateError || !applicationCandidate) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Payment</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Payment</h1>
         <Alert variant="error" title="Could not load payment">
           The application linked to this payment is unavailable. Please contact Dar Al Hay.
         </Alert>
@@ -85,7 +85,7 @@ export default async function VendorPaymentPage() {
   if (sweepError) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Payment</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Payment</h1>
         <Alert variant="error" title="Could not refresh payment status">
           Please refresh the page before continuing with payment.
         </Alert>
@@ -106,7 +106,7 @@ export default async function VendorPaymentPage() {
   if (paymentResult.error || applicationResult.error || !paymentResult.data || !applicationResult.data) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Payment</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Payment</h1>
         <Alert variant="error" title="Could not refresh payment status">
           Please refresh the page. If the problem continues, contact Dar Al Hay.
         </Alert>
@@ -129,7 +129,7 @@ export default async function VendorPaymentPage() {
   if (eventResult.error || !eventResult.data || boothResult.error) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Payment</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Payment</h1>
         <Alert variant="error" title="Could not load payment details">
           Please refresh the page. If the problem continues, contact Dar Al Hay.
         </Alert>
@@ -158,7 +158,7 @@ export default async function VendorPaymentPage() {
           <span aria-hidden="true" className="mx-1.5">/</span>
           <span className="text-ink-500">{event.name}</span>
         </nav>
-        <h1 className="mt-2 font-display text-h1 text-ink-950">Payment</h1>
+        <h1 className="mt-2 font-display text-h2 text-ink-950 sm:text-h1">Payment</h1>
         <p className="mt-2 text-sm text-ink-500">
           {booth ? `Booth ${booth.booth_number}` : "Booth no longer assigned"} · {event.name}
         </p>

@@ -91,7 +91,7 @@ export default function Home() {
           />
 
           <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28 lg:py-32">
-            <div className="grid items-center gap-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
+            <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-16">
               <div className="stagger-children max-w-2xl">
                 <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-1.5 text-caption font-semibold uppercase tracking-[0.12em] text-brand-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
@@ -136,7 +136,7 @@ export default function Home() {
               </div>
 
               {/* Floor-plan illustration (decorative) */}
-              <div aria-hidden="true" className="relative hidden lg:block">
+              <div aria-hidden="true" className="relative mx-auto w-full max-w-md lg:mx-0 lg:max-w-none">
                 <div className="absolute -inset-10 -z-10 rounded-[3rem] bg-[radial-gradient(circle_at_center,var(--color-brand-100),transparent_70%)]" />
                 <div className="rounded-3xl border border-ink-100 bg-white p-6 shadow-xl">
                   <div className="flex items-center justify-between gap-3">

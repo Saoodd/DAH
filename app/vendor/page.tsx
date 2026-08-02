@@ -128,7 +128,7 @@ export default async function VendorDashboardPage() {
   if (!business) {
     return (
       <div className="page-enter space-y-6">
-        <h1 className="font-display text-h1 text-ink-950">Welcome</h1>
+        <h1 className="font-display text-h2 text-ink-950 sm:text-h1">Welcome</h1>
         <Alert variant="warning" title="No business profile found">
           Something went wrong creating your profile during sign-up.{" "}
           <Link href="/vendor/profile?new=1" className="font-medium underline">
