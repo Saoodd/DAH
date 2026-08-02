@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
@@ -38,6 +39,7 @@ export function WaitingListRow({
   const [isPending, startTransition] = React.useTransition();
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [inviteOpen, setInviteOpen] = React.useState(false);
+  const [removeOpen, setRemoveOpen] = React.useState(false);
   const [noteText, setNoteText] = React.useState(notes ?? "");
   const [boothId, setBoothId] = React.useState(availableBooths[0]?.id ?? "");
   const noteFieldId = React.useId();
@@ -56,12 +58,13 @@ export function WaitingListRow({
       if (message) toast({ title: message, variant: "success" });
       setNoteOpen(false);
       setInviteOpen(false);
+      setRemoveOpen(false);
       router.refresh();
     });
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {status === "waiting" && (
         <>
           <Button
@@ -71,7 +74,7 @@ export function WaitingListRow({
             aria-label="Move vendor up in waiting-list priority"
             onClick={() => run(reorderPriorityAction(entryId, eventId, "up"))}
           >
-            ↑
+            <Icon name="chevron-up" size="sm" />
           </Button>
           <Button
             type="button"
@@ -80,22 +83,18 @@ export function WaitingListRow({
             aria-label="Move vendor down in waiting-list priority"
             onClick={() => run(reorderPriorityAction(entryId, eventId, "down"))}
           >
-            ↓
+            <Icon name="chevron-down" size="sm" />
           </Button>
           <Button
             type="button"
             size="sm"
             onClick={() => setInviteOpen(true)}
             disabled={availableBooths.length === 0}
+            title={availableBooths.length === 0 ? "No booths are currently available" : undefined}
           >
             Invite
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="danger"
-            onClick={() => run(removeFromWaitingListAction(entryId, eventId), "Removed.")}
-          >
+          <Button type="button" size="sm" variant="danger" onClick={() => setRemoveOpen(true)}>
             Remove
           </Button>
         </>
@@ -108,6 +107,7 @@ export function WaitingListRow({
         open={noteOpen}
         onOpenChange={setNoteOpen}
         title="Admin note"
+        description="Visible to admins only — the vendor never sees this."
         confirmLabel="Save"
         loading={isPending}
         onConfirm={() => run(addWaitingListNoteAction(entryId, eventId, noteText), "Note saved.")}
@@ -136,6 +136,17 @@ export function WaitingListRow({
           </Select>
         </Field>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+        title="Remove this vendor from the waiting list?"
+        description="They lose their place in the queue and won't receive booth invitations for this event."
+        confirmLabel="Remove vendor"
+        confirmVariant="danger"
+        loading={isPending}
+        onConfirm={() => run(removeFromWaitingListAction(entryId, eventId), "Removed.")}
+      />
     </div>
   );
 }

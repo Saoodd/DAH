@@ -14,9 +14,12 @@ import {
 } from "@/app/admin/events/[id]/payments/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import { formatAED } from "@/lib/format";
 
 type DialogKind = "reject" | "extend" | "reopen" | "refund" | "note" | "link" | "release" | null;
 
@@ -45,6 +48,8 @@ export function PaymentActions({
   const [dialog, setDialog] = React.useState<DialogKind>(null);
   const [text, setText] = React.useState("");
   const [number, setNumber] = React.useState(0);
+  const fieldId = React.useId();
+  const secondaryFieldId = React.useId();
 
   function run(promise: Promise<{ ok: boolean; error?: string }>, message: string) {
     startTransition(async () => {
@@ -71,16 +76,19 @@ export function PaymentActions({
           rel="noreferrer"
           className={buttonVariants({ variant: "outline", size: "sm" })}
         >
+          <Icon name="document" size="sm" />
           View receipt
         </a>
       )}
       {hasReceipt && !receiptUrl && (
-        <span className="self-center text-xs font-medium text-red-700">
+        <span className="inline-flex items-center gap-1 self-center text-xs font-medium text-red-700">
+          <Icon name="warning" size="xs" />
           Receipt unavailable
         </span>
       )}
       {["pending_payment", "pending_verification"].includes(status) && (
         <Button size="sm" onClick={() => run(confirmPaymentAction(paymentId, eventId), "Payment confirmed.")} loading={isPending}>
+          <Icon name="check" size="sm" />
           Confirm
         </Button>
       )}
@@ -122,25 +130,53 @@ export function PaymentActions({
         open={dialog === "reject"}
         onOpenChange={(o) => !o && setDialog(null)}
         title="Reject this submission"
-        confirmLabel="Reject"
+        description="The vendor keeps their booth and can resubmit a corrected receipt."
+        confirmLabel="Reject submission"
+        confirmVariant="danger"
         loading={isPending}
         onConfirm={() => {
           if (!text.trim()) return toast({ title: "A reason is required", variant: "error" });
           run(rejectReceiptAction(paymentId, eventId, text), "Rejected — vendor can resubmit.");
         }}
       >
-        <Textarea autoFocus rows={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Reason…" />
+        <Field label="Reason" htmlFor={fieldId} required>
+          <Textarea
+            id={fieldId}
+            autoFocus
+            rows={3}
+            maxLength={2000}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="e.g. Amount on the receipt doesn't match the booth price"
+          />
+        </Field>
       </ConfirmDialog>
 
       <ConfirmDialog
         open={dialog === "extend"}
         onOpenChange={(o) => !o && setDialog(null)}
         title="Extend payment deadline"
-        confirmLabel="Extend"
+        confirmLabel="Extend deadline"
         loading={isPending}
         onConfirm={() => run(extendPaymentDeadlineAction(paymentId, eventId, number || 30), "Deadline extended.")}
       >
-        <Input type="number" min={1} max={10080} step={1} placeholder="Extra minutes" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
+        <Field
+          label="Extra time (minutes)"
+          htmlFor={fieldId}
+          hint="Added on top of the current deadline. Defaults to 30 minutes."
+        >
+          <Input
+            id={fieldId}
+            type="number"
+            min={1}
+            max={10080}
+            step={1}
+            className="tabular-nums"
+            placeholder="30"
+            value={number || ""}
+            onChange={(e) => setNumber(Number(e.target.value))}
+          />
+        </Field>
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -148,11 +184,27 @@ export function PaymentActions({
         onOpenChange={(o) => !o && setDialog(null)}
         title="Reopen payment"
         description="Gives the vendor a fresh deadline. Requires their booth to still be assigned."
-        confirmLabel="Reopen"
+        confirmLabel="Reopen payment"
         loading={isPending}
         onConfirm={() => run(reopenPaymentAction(paymentId, eventId, number || 60), "Payment reopened.")}
       >
-        <Input type="number" min={5} max={10080} step={1} placeholder="Minutes for new deadline" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
+        <Field
+          label="New deadline (minutes from now)"
+          htmlFor={fieldId}
+          hint="Defaults to 60 minutes."
+        >
+          <Input
+            id={fieldId}
+            type="number"
+            min={5}
+            max={10080}
+            step={1}
+            className="tabular-nums"
+            placeholder="60"
+            value={number || ""}
+            onChange={(e) => setNumber(Number(e.target.value))}
+          />
+        </Field>
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -165,9 +217,35 @@ export function PaymentActions({
         loading={isPending}
         onConfirm={() => run(markRefundAction(paymentId, eventId, number, text), "Refund recorded.")}
       >
-        <div className="space-y-3">
-          <Input type="number" min={0.01} max={amount ?? 99999999.99} step="0.01" placeholder="Refund amount (AED)" value={number || ""} onChange={(e) => setNumber(Number(e.target.value))} />
-          <Textarea rows={2} maxLength={5000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Notes (optional)" />
+        <div className="space-y-4">
+          <Field
+            label="Refund amount (AED)"
+            htmlFor={fieldId}
+            hint={amount !== null ? `Payment total: ${formatAED(amount)}` : undefined}
+            required
+          >
+            <Input
+              id={fieldId}
+              type="number"
+              min={0.01}
+              max={amount ?? 99999999.99}
+              step="0.01"
+              className="tabular-nums"
+              placeholder="0.00"
+              value={number || ""}
+              onChange={(e) => setNumber(Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Notes (optional)" htmlFor={secondaryFieldId}>
+            <Textarea
+              id={secondaryFieldId}
+              rows={2}
+              maxLength={5000}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="e.g. Refunded via bank transfer on request"
+            />
+          </Field>
         </div>
       </ConfirmDialog>
 
@@ -175,11 +253,14 @@ export function PaymentActions({
         open={dialog === "note"}
         onOpenChange={(o) => !o && setDialog(null)}
         title="Internal payment note"
+        description="Visible to admins only — the vendor never sees this."
         confirmLabel="Save note"
         loading={isPending}
         onConfirm={() => run(addPaymentNoteAction(paymentId, eventId, text), "Note saved.")}
       >
-        <Textarea autoFocus rows={3} maxLength={5000} value={text} onChange={(e) => setText(e.target.value)} />
+        <Field label="Note" htmlFor={fieldId}>
+          <Textarea id={fieldId} autoFocus rows={3} maxLength={5000} value={text} onChange={(e) => setText(e.target.value)} />
+        </Field>
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -191,7 +272,18 @@ export function PaymentActions({
         loading={isPending}
         onConfirm={() => run(attachPaymentLinkAction(paymentId, eventId, text), "Payment link saved.")}
       >
-        <Input autoFocus type="url" inputMode="url" maxLength={2048} value={text} onChange={(e) => setText(e.target.value)} placeholder="https://…" />
+        <Field label="Payment URL" htmlFor={fieldId}>
+          <Input
+            id={fieldId}
+            autoFocus
+            type="url"
+            inputMode="url"
+            maxLength={2048}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="https://…"
+          />
+        </Field>
       </ConfirmDialog>
 
       <ConfirmDialog

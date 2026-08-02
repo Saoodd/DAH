@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { CategoryRuleRow } from "@/components/admin/category-rule-row";
 import { Alert } from "@/components/ui/alert";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Icon } from "@/components/ui/icon";
 
 export const metadata: Metadata = { title: "Booth Recommendations" };
 
@@ -31,19 +33,22 @@ export default async function AdminRecommendationsPage({ params }: { params: Pro
   const zones = zonesResult.data;
   const rules = rulesResult.data;
 
-
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       <div>
-        <p className="text-sm text-ink-400">
-          <Link href="/admin/events" className="hover:text-brand-600">
+        <nav aria-label="Breadcrumb" className="text-sm text-ink-400">
+          <Link
+            href="/admin/events"
+            className="transition-colors hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+          >
             Events
-          </Link>{" "}
-          / {event.name}
-        </p>
-        <h1 className="text-2xl font-semibold text-ink-950">Booth recommendations</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          Rule-based only — configure what booths get recommended to each category.
+          </Link>
+          <span aria-hidden="true"> / </span>
+          <span className="text-ink-600">{event.name}</span>
+        </nav>
+        <h1 className="mt-3 font-display text-h2 text-ink-950 sm:text-h1">Booth recommendations</h1>
+        <p className="mt-2 text-sm text-ink-500">
+          Rule-based only — configure which booths get recommended to each vendor category.
         </p>
       </div>
 
@@ -55,17 +60,25 @@ export default async function AdminRecommendationsPage({ params }: { params: Pro
 
       {!zones?.length && <Alert variant="info">Add zones on the booth map before configuring zone preferences.</Alert>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {(categories ?? []).map((category) => (
-          <CategoryRuleRow
-            key={category.id}
-            eventId={id}
-            category={category}
-            zones={zones ?? []}
-            rule={rules?.find((r) => r.category_id === category.id) ?? null}
-          />
-        ))}
-      </div>
+      {!categories?.length ? (
+        <EmptyState
+          icon={<Icon name="map-pin" size="lg" />}
+          title="No vendor categories yet"
+          description="Recommendation rules are configured per category — add categories first."
+        />
+      ) : (
+        <div className="stagger-children grid gap-4 sm:grid-cols-2">
+          {categories.map((category) => (
+            <CategoryRuleRow
+              key={category.id}
+              eventId={id}
+              category={category}
+              zones={zones ?? []}
+              rule={rules?.find((r) => r.category_id === category.id) ?? null}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

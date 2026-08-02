@@ -10,10 +10,11 @@ export default async function AdminBankDetailsPage() {
   if (error) throw new Error("Could not load bank-transfer details.");
 
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-ink-950">Bank details</h1>
-        <p className="mt-1 text-sm text-ink-500">
+        <p className="text-caption font-semibold uppercase tracking-[0.14em] text-brand-700">Admin console</p>
+        <h1 className="mt-2 font-display text-h2 text-ink-950 sm:text-h1">Bank details</h1>
+        <p className="mt-2 text-sm text-ink-500">
           Shown to vendors choosing bank transfer as their payment method.
         </p>
       </div>

@@ -7,7 +7,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import type { Database } from "@/types/database";
@@ -50,10 +50,16 @@ export function BankDetailsForm({ existing }: { existing: BankDetails | null }) 
 
   return (
     <Card>
-      <CardContent className="py-5">
-        <form onSubmit={onSubmit} className="space-y-4">
+      <CardHeader>
+        <CardTitle>Bank transfer account</CardTitle>
+        <CardDescription>
+          These details appear on the vendor payment page exactly as entered — double-check the IBAN before saving.
+        </CardDescription>
+      </CardHeader>
+      <form onSubmit={onSubmit}>
+        <CardContent className="space-y-5">
           {existing && <input type="hidden" name="id" value={existing.id} />}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Bank name" htmlFor="bankName" required>
               <Input id="bankName" name="bankName" maxLength={100} defaultValue={existing?.bank_name} required />
             </Field>
@@ -61,39 +67,58 @@ export function BankDetailsForm({ existing }: { existing: BankDetails | null }) 
               <Input id="accountName" name="accountName" maxLength={150} defaultValue={existing?.account_name} required />
             </Field>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             <Field label="IBAN" htmlFor="iban" required>
-              <Input id="iban" name="iban" minLength={15} maxLength={42} autoCapitalize="characters" defaultValue={existing?.iban} required />
+              <Input
+                id="iban"
+                name="iban"
+                minLength={15}
+                maxLength={42}
+                autoCapitalize="characters"
+                spellCheck={false}
+                className="font-mono tracking-wide"
+                defaultValue={existing?.iban}
+                required
+              />
             </Field>
             <Field label="SWIFT / BIC" htmlFor="swiftCode">
-              <Input id="swiftCode" name="swiftCode" minLength={8} maxLength={11} autoCapitalize="characters" defaultValue={existing?.swift_code ?? ""} />
+              <Input
+                id="swiftCode"
+                name="swiftCode"
+                minLength={8}
+                maxLength={11}
+                autoCapitalize="characters"
+                spellCheck={false}
+                className="font-mono tracking-wide"
+                defaultValue={existing?.swift_code ?? ""}
+              />
             </Field>
           </div>
-          <Field label="Notes for vendors" htmlFor="notes">
+          <Field label="Notes for vendors" htmlFor="notes" hint="Optional — e.g. a payment reference vendors should include.">
             <Textarea id="notes" name="notes" rows={2} maxLength={1000} defaultValue={existing?.notes ?? ""} />
           </Field>
-          <div className="flex gap-2">
-            <Button type="submit" size="sm" loading={isPending}>
-              Save
+        </CardContent>
+        <CardFooter className="flex items-center justify-between gap-3">
+          <Button type="submit" loading={isPending}>
+            Save details
+          </Button>
+          {existing && (
+            <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
+              Delete
             </Button>
-            {existing && (
-              <Button type="button" size="sm" variant="danger" onClick={() => setDeleteOpen(true)}>
-                Delete
-              </Button>
-            )}
-          </div>
-        </form>
-        <ConfirmDialog
-          open={deleteOpen}
-          onOpenChange={setDeleteOpen}
-          title="Delete bank details?"
-          description="Vendors will no longer see bank-transfer instructions until new details are saved."
-          confirmLabel="Delete"
-          confirmVariant="danger"
-          loading={isPending}
-          onConfirm={onDelete}
-        />
-      </CardContent>
+          )}
+        </CardFooter>
+      </form>
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete bank details?"
+        description="Vendors will no longer see bank-transfer instructions until new details are saved."
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        loading={isPending}
+        onConfirm={onDelete}
+      />
     </Card>
   );
 }

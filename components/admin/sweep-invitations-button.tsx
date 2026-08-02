@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { releaseExpiredInvitationsAction } from "@/app/admin/events/[id]/waiting-list/actions";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/toast";
 
 export function SweepInvitationsButton({ eventId }: { eventId: string }) {
@@ -28,6 +29,7 @@ export function SweepInvitationsButton({ eventId }: { eventId: string }) {
         })
       }
     >
+      <Icon name="clock" size="sm" />
       Release expired invitations
     </Button>
   );

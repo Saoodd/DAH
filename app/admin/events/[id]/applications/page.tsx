@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApplicationActions } from "@/components/admin/application-actions";
 import { Alert } from "@/components/ui/alert";
+import { Icon } from "@/components/ui/icon";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Pagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 import { APPLICATION_STATUS_LABELS } from "@/lib/constants";
@@ -71,18 +73,26 @@ export default async function EventApplicationsPage({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       <div>
-        <p className="text-sm text-ink-400">
-          <Link href="/admin/events" className="hover:text-brand-600">
+        <nav aria-label="Breadcrumb" className="text-sm text-ink-400">
+          <Link
+            href="/admin/events"
+            className="transition-colors hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+          >
             Events
-          </Link>{" "}
-          / {event.name}
+          </Link>
+          <span aria-hidden="true"> / </span>
+          <span className="text-ink-600">{event.name}</span>
+        </nav>
+        <h1 className="mt-3 font-display text-h2 text-ink-950 sm:text-h1">Applications</h1>
+        <p className="mt-2 text-sm text-ink-500">
+          Review and approve vendor applications for this event
+          {typeof count === "number" ? ` · ${count.toLocaleString("en-US")} matching` : ""}.
         </p>
-        <h1 className="text-2xl font-semibold text-ink-950">Applications</h1>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by application status">
         {STATUS_FILTERS.map((s) => (
           <Link
             key={s}
@@ -90,9 +100,12 @@ export default async function EventApplicationsPage({
               pathname: `/admin/events/${id}/applications`,
               query: s === "all" ? {} : { status: s },
             }}
+            aria-current={status === s ? "true" : undefined}
             className={cn(
-              "rounded-full border px-3 py-1.5 text-xs font-medium",
-              status === s ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 text-ink-600 hover:bg-ink-50"
+              "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
+              status === s
+                ? "border-ink-950 bg-ink-950 text-white shadow-sm"
+                : "border-ink-200 bg-white text-ink-600 hover:border-ink-300 hover:bg-ink-50 hover:text-ink-900"
             )}
           >
             {s === "all" ? "All" : APPLICATION_STATUS_LABELS[s]}
@@ -109,18 +122,26 @@ export default async function EventApplicationsPage({
       <Card>
         <CardContent className="p-0">
           {!error && !applications?.length ? (
-            <p className="px-6 py-8 text-center text-sm text-ink-400">No applications match this filter.</p>
+            <EmptyState
+              icon={<Icon name="clipboard-list" size="lg" />}
+              title="No applications match this filter"
+              description={
+                status === "all"
+                  ? "Applications will appear here as soon as vendors apply to this event."
+                  : "Try a different status filter to see every application for this event."
+              }
+            />
           ) : !error ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-ink-100 text-left text-xs uppercase tracking-wide text-ink-400">
-                    <th className="px-6 py-3 font-medium">Business</th>
-                    <th className="px-6 py-3 font-medium">Category</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
-                    <th className="px-6 py-3 font-medium">Total</th>
-                    <th className="px-6 py-3 font-medium">Applied</th>
-                    <th className="px-6 py-3 font-medium">Actions</th>
+                  <tr className="border-b border-ink-100 bg-ink-50/50 text-left text-caption font-semibold uppercase tracking-[0.08em] text-ink-400">
+                    <th className="px-6 py-3 font-semibold">Business</th>
+                    <th className="px-6 py-3 font-semibold">Category</th>
+                    <th className="px-6 py-3 font-semibold">Status</th>
+                    <th className="px-6 py-3 font-semibold">Total</th>
+                    <th className="px-6 py-3 font-semibold">Applied</th>
+                    <th className="px-6 py-3 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -131,10 +152,20 @@ export default async function EventApplicationsPage({
                       categories: { name: string } | null;
                     } | null;
                     return (
-                      <tr key={a.id} className="hover:bg-ink-50">
+                      <tr key={a.id} className="transition-colors hover:bg-ink-50/70">
                         <td className="px-6 py-4">
-                          <p className="font-medium text-ink-900">{business?.business_name}</p>
-                          <p className="text-xs text-ink-400">{business?.owner_name}</p>
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-sm font-semibold text-brand-700"
+                              aria-hidden="true"
+                            >
+                              {business?.business_name?.trim().charAt(0).toUpperCase() || "•"}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-ink-900">{business?.business_name}</p>
+                              <p className="text-caption text-ink-400">{business?.owner_name}</p>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-ink-600">{business?.categories?.name ?? "—"}</td>
                         <td className="px-6 py-4">
@@ -142,8 +173,12 @@ export default async function EventApplicationsPage({
                             {APPLICATION_STATUS_LABELS[a.status]}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4 text-ink-600">{formatAED(a.total_amount)}</td>
-                        <td className="px-6 py-4 text-ink-500">{formatDate(a.submitted_at ?? a.created_at)}</td>
+                        <td className="whitespace-nowrap px-6 py-4 font-medium tabular-nums text-ink-900">
+                          {formatAED(a.total_amount)}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-ink-500">
+                          {formatDate(a.submitted_at ?? a.created_at)}
+                        </td>
                         <td className="px-6 py-4">
                           <ApplicationActions applicationId={a.id} eventId={id} status={a.status} totalAmount={a.total_amount} />
                         </td>

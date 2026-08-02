@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { sweepExpiredPaymentsAction } from "@/app/admin/events/[id]/payments/actions";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/toast";
 
 export function SweepExpiredButton({ eventId }: { eventId: string }) {
@@ -28,6 +29,7 @@ export function SweepExpiredButton({ eventId }: { eventId: string }) {
         })
       }
     >
+      <Icon name="clock" size="sm" />
       Release expired payments
     </Button>
   );

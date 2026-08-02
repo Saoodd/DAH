@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { upsertCategoryRuleAction, deleteCategoryRuleAction } from "@/app/admin/events/[id]/recommendations/actions";
+import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,9 +58,15 @@ export function CategoryRuleRow({
   }
 
   return (
-    <form onSubmit={onSubmit} className="rounded-xl border border-ink-100 p-4">
-      <div className="flex items-center justify-between">
-        <p className="font-semibold text-ink-900">{category.name}</p>
+    <form
+      onSubmit={onSubmit}
+      className="flex flex-col rounded-2xl border border-ink-100 bg-white p-5 shadow-sm transition-shadow duration-200"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+          <p className="truncate font-semibold text-ink-900">{category.name}</p>
+          {rule && <Badge className="border-brand-200 bg-brand-50 text-brand-700">Rule active</Badge>}
+        </div>
         {rule && (
           <Button type="button" size="sm" variant="ghost" onClick={onDelete}>
             Clear rule
@@ -67,9 +74,14 @@ export function CategoryRuleRow({
         )}
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor={`preferred-zone-${category.id}`} className="mb-1 block text-xs text-ink-500">Preferred zone</label>
+          <label
+            htmlFor={`preferred-zone-${category.id}`}
+            className="mb-1.5 block text-caption font-medium uppercase tracking-wide text-ink-400"
+          >
+            Preferred zone
+          </label>
           <Select id={`preferred-zone-${category.id}`} name="preferredZoneId" defaultValue={rule?.preferred_zone_id ?? ""}>
             <option value="">No preference</option>
             {zones.map((z) => (
@@ -80,36 +92,64 @@ export function CategoryRuleRow({
           </Select>
         </div>
         <div>
-          <label htmlFor={`max-per-zone-${category.id}`} className="mb-1 block text-xs text-ink-500">Max booths per zone</label>
-          <Input id={`max-per-zone-${category.id}`} name="maxPerZone" type="number" min={1} max={10000} step={1} defaultValue={rule?.max_per_zone ?? ""} />
+          <label
+            htmlFor={`max-per-zone-${category.id}`}
+            className="mb-1.5 block text-caption font-medium uppercase tracking-wide text-ink-400"
+          >
+            Max booths per zone
+          </label>
+          <Input
+            id={`max-per-zone-${category.id}`}
+            name="maxPerZone"
+            type="number"
+            min={1}
+            max={10000}
+            step={1}
+            className="tabular-nums"
+            placeholder="No limit"
+            defaultValue={rule?.max_per_zone ?? ""}
+          />
         </div>
       </div>
 
-      <div className="mt-3">
-        <p className="mb-1 text-xs text-ink-500">Preferred features</p>
+      <fieldset className="mt-4">
+        <legend className="mb-2 block text-caption font-medium uppercase tracking-wide text-ink-400">
+          Preferred features
+        </legend>
         <div className="flex flex-wrap gap-2">
           {FEATURE_TAG_OPTIONS.map((tag) => (
-            <label key={tag} className="flex items-center gap-1.5 text-xs text-ink-600">
+            <label
+              key={tag}
+              className="flex cursor-pointer select-none items-center gap-2 rounded-full border border-ink-200 bg-white px-3 py-1.5 text-xs font-medium text-ink-600 transition-colors hover:border-ink-300 hover:bg-ink-50 has-checked:border-brand-300 has-checked:bg-brand-50 has-checked:text-brand-800"
+            >
               <input
                 type="checkbox"
                 name="preferredFeatureTags"
                 value={tag}
                 defaultChecked={rule?.preferred_feature_tags.includes(tag)}
+                className="h-3.5 w-3.5 rounded border-ink-300 accent-brand-700"
               />
               {FEATURE_TAG_LABELS[tag]}
             </label>
           ))}
         </div>
-      </div>
+      </fieldset>
 
-      <label className="mt-3 flex items-center gap-2 text-sm text-ink-700">
-        <input type="checkbox" name="avoidAdjacent" defaultChecked={rule?.avoid_adjacent_same_category} />
+      <label className="mt-4 flex cursor-pointer select-none items-center gap-2.5 rounded-xl border border-ink-100 bg-ink-50/50 px-3.5 py-3 text-sm text-ink-700 transition-colors hover:bg-ink-50">
+        <input
+          type="checkbox"
+          name="avoidAdjacent"
+          defaultChecked={rule?.avoid_adjacent_same_category}
+          className="h-4 w-4 rounded border-ink-300 accent-brand-700"
+        />
         Avoid placing similar businesses next to each other
       </label>
 
-      <Button type="submit" size="sm" className="mt-3" loading={isPending}>
-        Save rule
-      </Button>
+      <div className="mt-4 flex justify-end border-t border-ink-100 pt-4">
+        <Button type="submit" size="sm" loading={isPending}>
+          Save rule
+        </Button>
+      </div>
     </form>
   );
 }

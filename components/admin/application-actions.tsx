@@ -6,9 +6,12 @@ import { approveApplicationAction, rejectApplicationAction } from "@/app/admin/a
 import { recordOfflinePaymentAction } from "@/app/admin/events/[id]/payments/actions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icon";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { formatAED } from "@/lib/format";
 
 export function ApplicationActions({
   applicationId,
@@ -29,6 +32,9 @@ export function ApplicationActions({
   const [reason, setReason] = React.useState("");
   const [amount, setAmount] = React.useState(totalAmount ?? 0);
   const [notes, setNotes] = React.useState("");
+  const reasonFieldId = React.useId();
+  const amountFieldId = React.useId();
+  const notesFieldId = React.useId();
 
   function approve() {
     startTransition(async () => {
@@ -83,6 +89,7 @@ export function ApplicationActions({
       {canReview && (
         <>
           <Button size="sm" onClick={approve} loading={isPending}>
+            <Icon name="check" size="sm" />
             Approve
           </Button>
           <Button size="sm" variant="outline" onClick={() => setRejectOpen(true)}>
@@ -92,6 +99,7 @@ export function ApplicationActions({
       )}
       {canRecordOffline && (
         <Button size="sm" variant="outline" onClick={() => setOfflineOpen(true)}>
+          <Icon name="banknotes" size="sm" />
           Record payment
         </Button>
       )}
@@ -101,11 +109,22 @@ export function ApplicationActions({
         onOpenChange={setRejectOpen}
         title="Reject this application"
         description="The vendor will see this reason on their dashboard."
-        confirmLabel="Reject"
+        confirmLabel="Reject application"
+        confirmVariant="danger"
         loading={isPending}
         onConfirm={reject}
       >
-        <Textarea autoFocus rows={3} maxLength={2000} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason…" />
+        <Field label="Reason" htmlFor={reasonFieldId} required>
+          <Textarea
+            id={reasonFieldId}
+            autoFocus
+            rows={3}
+            maxLength={2000}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Explain why this application can't proceed…"
+          />
+        </Field>
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -117,9 +136,35 @@ export function ApplicationActions({
         loading={isPending}
         onConfirm={recordOffline}
       >
-        <div className="space-y-3">
-          <Input type="number" min={0.01} max={99999999.99} step="0.01" value={amount} onChange={(e) => setAmount(Number(e.target.value))} placeholder="Amount (AED)" />
-          <Textarea rows={2} maxLength={5000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" />
+        <div className="space-y-4">
+          <Field
+            label="Amount (AED)"
+            htmlFor={amountFieldId}
+            hint={totalAmount !== null ? `Application total: ${formatAED(totalAmount)}` : undefined}
+            required
+          >
+            <Input
+              id={amountFieldId}
+              type="number"
+              min={0.01}
+              max={99999999.99}
+              step="0.01"
+              className="tabular-nums"
+              value={amount}
+              onChange={(e) => setAmount(Number(e.target.value))}
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="Notes (optional)" htmlFor={notesFieldId}>
+            <Textarea
+              id={notesFieldId}
+              rows={2}
+              maxLength={5000}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Paid in cash at the office"
+            />
+          </Field>
         </div>
       </ConfirmDialog>
     </div>
