@@ -195,6 +195,12 @@
     transform: translateY(0);
   }
 }
+@keyframes nav-elevate {
+  to {
+    border-bottom-color: var(--color-ink-100);
+    box-shadow: var(--shadow-sm);
+  }
+}
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
@@ -281,6 +287,21 @@ body {
   }
   .stagger-children > :nth-child(n + 8) {
     animation-delay: 350ms;
+  }
+
+  /* Sticky navbar elevation: the bottom border + shadow fade in only once
+     the page scrolls, via a CSS scroll-driven animation (no JS listeners).
+     Browsers without scroll-timeline support keep the always-on border. */
+  .nav-scroll {
+    border-bottom: 1px solid var(--color-ink-100);
+  }
+  @supports (animation-timeline: scroll()) {
+    .nav-scroll {
+      border-bottom-color: transparent;
+      animation: nav-elevate linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 5rem;
+    }
   }
 
   /* Subtle lift for interactive cards/tiles. */
