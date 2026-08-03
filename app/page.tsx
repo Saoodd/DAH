@@ -230,7 +230,7 @@ export default function Home() {
                 For vendors
               </p>
               <h2 className="mt-3 font-display text-h2 text-balance text-ink-950 sm:text-h1">
-                Built for how Dar Al Hay events actually run.
+                Built for how Dar&nbsp;Al&nbsp;Hay events actually run.
               </h2>
             </div>
 

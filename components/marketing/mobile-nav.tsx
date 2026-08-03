@@ -45,7 +45,7 @@ export function MobileNav({ isAuthenticated, dashboardHref }: MobileNavProps) {
       {open && (
         <>
           <div
-            className="fixed inset-0 top-16 z-30 animate-in bg-ink-950/25 md:hidden"
+            className="fixed inset-0 top-16 z-30 animate-in bg-ink-950/40 backdrop-blur-[2px] md:hidden"
             onClick={close}
             aria-hidden="true"
           />
